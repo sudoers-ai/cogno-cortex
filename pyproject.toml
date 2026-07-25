@@ -25,8 +25,8 @@ classifiers = [
 # cogno lib is on PyPI yet — CI installs the chain from git (see ci.yml).
 dependencies = [
     "pydantic>=2.0",
-    "cogno-anima",
-    "cogno-synapse",
+    "cogno-anima>=0.1,<0.2",
+    "cogno-synapse>=0.1,<0.2",
 ]
 
 [project.urls]

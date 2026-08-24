@@ -1,7 +1,7 @@
 """SkillManifest / SkillResult contracts + BaseTool / BasePromptTool."""
 
 
-from cogno_cortex import BasePromptTool, SkillManifest, SkillResult, ToolContext
+from cogno_cortex import BasePromptTool, BaseTool, SkillManifest, SkillResult, ToolContext
 
 
 def test_to_tool_schema_with_parameters(math_manifest):
@@ -58,3 +58,59 @@ async def test_base_prompt_tool(fake_backend):
     res = await Summ(text="hello").run(ToolContext(backend=fake_backend))
     assert res.payload == "echo:Summarize: hello"
     assert res.usage == {"tokens_in": 5, "tokens_out": 3}
+
+
+# ── the description a model reads has exactly one home ────────────────────────────────
+#
+# ``BaseTool.description`` was an ``@abstractmethod`` until 2026-08-24, which forced every
+# skill author to write a SECOND description that nothing consumes: ``to_tool_schema`` renders
+# the MANIFEST's. Measured on the reference host, 10 of 12 skills had drifted — silently,
+# because it is the only inert duplicate (``name`` and ``parameters`` are duplicated the same
+# way and never drifted: a wrong name does not dispatch, a wrong parameter fails the call).
+# One was found the expensive way: a description promising a date form the parser lacked,
+# failing 50-86% of its calls, "fixed" by editing only the property — which changed nothing
+# the model ever saw.
+
+def test_a_skill_need_not_write_a_second_description():
+    """The property is optional now. A tool that declares none still builds and still runs.
+
+    Mutation: restore ``@abstractmethod`` and this fails at instantiation."""
+
+    class Bare(BaseTool):
+        q: str = ""
+
+        @property
+        def name(self) -> str:
+            return "bare"
+
+        async def run(self, context: ToolContext) -> SkillResult:
+            return SkillResult(skill_name=self.name, payload="ok")
+
+    assert Bare().description == ""
+    assert SkillManifest(name="bare", description="what the model reads",
+                         tool_class=Bare).to_tool_schema()["function"]["description"] == (
+        "what the model reads")
+
+
+def test_the_schema_the_model_receives_comes_from_the_MANIFEST():
+    """Not from the property — the whole point. When the two disagree the manifest wins, so a
+    host maintaining both is maintaining one string nobody reads."""
+
+    class Divergent(BaseTool):
+        q: str = ""
+
+        @property
+        def name(self) -> str:
+            return "divergent"
+
+        @property
+        def description(self) -> str:
+            return "WHAT THE PROPERTY SAYS"
+
+        async def run(self, context: ToolContext) -> SkillResult:
+            return SkillResult(skill_name=self.name, payload="ok")
+
+    published = SkillManifest(name="divergent", description="WHAT THE MANIFEST SAYS",
+                              tool_class=Divergent).to_tool_schema()["function"]["description"]
+    assert published == "WHAT THE MANIFEST SAYS"
+    assert Divergent().description not in published

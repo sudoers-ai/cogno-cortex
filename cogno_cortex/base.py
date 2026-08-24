@@ -64,9 +64,24 @@ class BaseTool(BaseModel, ABC):
         """Unique skill name (must match the ``SkillManifest.name``)."""
 
     @property
-    @abstractmethod
     def description(self) -> str:
-        """Human-readable description of what this skill does."""
+        """Optional. The text a MODEL reads is ``SkillManifest.description`` — that is what
+        :meth:`SkillManifest.to_tool_schema` renders into the tool schema, and it is the only
+        one that exists for a provider-only skill (``tool_class=None``).
+
+        This was an ``@abstractmethod`` until 2026-08-24, which forced every author to write a
+        SECOND description that nothing consumes. Measured across the reference host: name and
+        parameters are duplicated the same way and never drifted (0 of 11) because they are
+        load-bearing — a wrong name does not dispatch, a wrong parameter fails the call. The
+        description was the only inert duplicate, and 10 of 12 skills had drifted, silently.
+        One of them was found the expensive way: a tool description promising a date form the
+        parser lacked, failing 50-86% of its calls, and the fix edited only this property — so
+        it changed nothing the model ever saw.
+
+        Overriding it is allowed for a skill that wants a distinct human-facing blurb, but a
+        host that publishes only the manifest should leave it alone rather than maintain a
+        second string with no consumer."""
+        return ""
 
     @abstractmethod
     async def run(self, context: ToolContext) -> SkillResult:

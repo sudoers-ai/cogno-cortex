@@ -76,15 +76,19 @@ class CortexDispatcher:
             return ToolResult(output="", ok=False, error=f"unknown tool: {name}")
         manifest = self._manifest(name)
         mutating = bool(manifest.mutating) if manifest else False
+        # Pure transport: the skill's promise travels, this layer decides nothing about it.
+        asks = bool(result.needs_confirmation)
         if result.ok:
-            return ToolResult(output=str(result.payload), ok=True, side_effect=mutating)
+            return ToolResult(output=str(result.payload), ok=True, side_effect=mutating,
+                              needs_confirmation=asks)
         # A FAILED call reports no side effect. ``mutating`` is a property of the TOOL, read
         # from the manifest per NAME before anything ran, so copying it here would say "this
         # booking wrote something" about a booking the skill rejected. Nothing is lost: the
         # per-name question still has an answer (``is_mutating``); what stops is the RESULT
         # claiming it. A skill that wrote and only then failed is not representable either way
         # — the old ``True`` did not mean that, it meant "this tool is the kind that writes".
-        return ToolResult(output="", ok=False, error=str(result.payload), side_effect=False)
+        return ToolResult(output="", ok=False, error=str(result.payload), side_effect=False,
+                          needs_confirmation=asks)
 
     # ── ToolPolicyDispatcher ──────────────────────────────────────────────
     def is_mutating(self, name: str) -> bool:

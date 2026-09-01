@@ -98,6 +98,9 @@ class SkillResult:
         provider_type: Execution backend used.
         usage:         Token usage if an LLM was involved ({"tokens_in", "tokens_out"}).
         metadata:      Extra context (model name, etc.).
+        needs_confirmation:
+                       The skill RAN, read the data, and decided it must NOT commit without
+                       asking about THIS call. See below.
     """
 
     skill_name: str
@@ -109,6 +112,21 @@ class SkillResult:
     provider_type: str = "local"
     usage: dict[str, int] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    # ``True`` is a PROMISE that nothing was committed, and the skill is the only layer that
+    # can make it: gate B (in the EGO) holds a tool by NAME, decided BEFORE anything runs, so
+    # it cannot know that cancelling *this* appointment is two hours away or that *this* entry
+    # is a hundred times the usual one. The skill knows, because it READ — and because it ran,
+    # its ``payload`` is a proposal grounded in real data instead of a generic "are you sure?".
+    #
+    # The dispatcher TRANSPORTS this to ``ToolResult.needs_confirmation`` and decides nothing:
+    # when to raise it is the skill's business, and a condition in the dispatcher about *when*
+    # to set it would stop being transport and start being policy.
+    #
+    # The confirmation comes BACK through the channel this lib already owns — the skill's own
+    # ``ToolContext.metadata`` — because what a skill needs in order to commit is the skill's
+    # business, and the pipeline never invents an argument name for it.
+    needs_confirmation: bool = False
 
     @property
     def ok(self) -> bool:

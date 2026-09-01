@@ -1,6 +1,8 @@
 """CortexDispatcher: the bridge to cogno-anima's ToolDispatcher contract."""
 
 
+import pytest
+
 from cogno_anima.tools import ToolDispatcher, ToolPolicyDispatcher
 
 from cogno_cortex import (
@@ -65,6 +67,39 @@ async def test_execute_unknown_is_recoverable(math_manifest):
     res = await CortexDispatcher(reg, bus).execute("ghost", {})
     assert res.ok is False
     assert "unknown tool" in (res.error or "")
+
+
+@pytest.mark.parametrize("status", ["success", "error"])
+async def test_needs_confirmation_is_TRANSPORTED_on_both_branches(status):
+    """Pure transport: WHEN to ask is the skill's business, so the dispatcher carries the flag
+    on whichever branch the skill returned it. A condition here about when to set it would
+    stop being transport and start being policy — and gate C exists precisely because this
+    layer, deciding per NAME before the call, is the one that cannot know."""
+    class _Asking(BaseTool):
+        @property
+        def name(self):
+            return "cancel"
+
+        @property
+        def description(self):
+            return "cancel"
+
+        async def run(self, context):
+            return SkillResult(skill_name="cancel", status=status, payload="starts in 2h",
+                               needs_confirmation=True)
+
+    m = SkillManifest(name="cancel", tool_class=_Asking, mutating=True)
+    reg, bus = _wire(m)
+    res = await CortexDispatcher(reg, bus).execute("cancel", {})
+    assert res.needs_confirmation is True, f"the skill asked on the {status} branch and it was dropped"
+
+
+async def test_a_skill_that_does_NOT_ask_carries_a_False(math_manifest):
+    """The default must stay False — a flag that were True by accident would hold every call
+    and turn the gate into an outage."""
+    reg, bus = _wire(math_manifest)
+    res = await CortexDispatcher(reg, bus).execute("math", {"a": 1, "op": "+", "b": 1})
+    assert res.ok is True and res.needs_confirmation is False
 
 
 async def test_a_mutating_skill_that_FAILS_reports_no_side_effect():

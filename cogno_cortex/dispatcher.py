@@ -75,10 +75,16 @@ class CortexDispatcher:
             # hallucinated / unknown tool name → recoverable, EGO self-corrects
             return ToolResult(output="", ok=False, error=f"unknown tool: {name}")
         manifest = self._manifest(name)
-        side_effect = bool(manifest.mutating) if manifest else False
+        mutating = bool(manifest.mutating) if manifest else False
         if result.ok:
-            return ToolResult(output=str(result.payload), ok=True, side_effect=side_effect)
-        return ToolResult(output="", ok=False, error=str(result.payload), side_effect=side_effect)
+            return ToolResult(output=str(result.payload), ok=True, side_effect=mutating)
+        # A FAILED call reports no side effect. ``mutating`` is a property of the TOOL, read
+        # from the manifest per NAME before anything ran, so copying it here would say "this
+        # booking wrote something" about a booking the skill rejected. Nothing is lost: the
+        # per-name question still has an answer (``is_mutating``); what stops is the RESULT
+        # claiming it. A skill that wrote and only then failed is not representable either way
+        # — the old ``True`` did not mean that, it meant "this tool is the kind that writes".
+        return ToolResult(output="", ok=False, error=str(result.payload), side_effect=False)
 
     # ── ToolPolicyDispatcher ──────────────────────────────────────────────
     def is_mutating(self, name: str) -> bool:

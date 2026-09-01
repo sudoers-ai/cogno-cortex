@@ -67,6 +67,29 @@ async def test_execute_unknown_is_recoverable(math_manifest):
     assert "unknown tool" in (res.error or "")
 
 
+async def test_a_mutating_skill_that_FAILS_reports_no_side_effect():
+    """This bench's own gap, closed.
+
+    It had cases that FAIL (with a non-mutating skill) and cases that MUTATE (with a
+    succeeding one) — never the intersection. So the branch that stamped a REJECTED write as
+    a write passed 45/45 here, and the combination only ever showed up in the consumer's
+    suite, 11 times (measured 2026-09-01). A lib whose defect only appears downstream has a
+    hole in its own bench.
+
+    ``mutating`` is read from the manifest per NAME, before anything runs; ``side_effect`` on
+    the result has to describe what HAPPENED.
+    """
+    m = SkillManifest(name="book", tool_class=_FailingWriteTool, mutating=True)
+    reg, bus = _wire(m)
+    disp = CortexDispatcher(reg, bus)
+    res = await disp.execute("book", {})
+    assert res.ok is False
+    assert res.side_effect is False, "a write the skill rejected is not a write"
+    # ...and the TOOL is still declared mutating. Without this, "mutating=False in the
+    # manifest" would satisfy the assertion above while destroying what it measures.
+    assert disp.is_mutating("book") is True
+
+
 async def test_side_effect_reflects_mutating_flag():
     m = SkillManifest(name="write", tool_class=_EchoTool, mutating=True)
     reg, bus = _wire(m)
@@ -110,6 +133,22 @@ async def test_backend_and_metadata_reach_the_skill():
 
 # ── helper skill ──────────────────────────────────────────────────────
 from cogno_cortex import BaseTool, SkillResult  # noqa: E402
+
+
+class _FailingWriteTool(BaseTool):
+    """A MUTATING skill whose call is rejected at execute time (the slot was taken)."""
+
+    @property
+    def name(self):
+        return "book"
+
+    @property
+    def description(self):
+        return "book an appointment"
+
+    async def run(self, context):
+        return SkillResult(skill_name=self.name, status="error",
+                           payload="09:00 on 2026-07-02 is already booked")
 
 
 class _EchoTool(BaseTool):

@@ -76,6 +76,22 @@ runs the skill and maps `SkillResult → ToolResult`; `is_mutating` / `requires_
 read the manifest flags so the EGO's read-only mask + confirmation gate work for
 skills too.
 
+When you are not ranking — you already know which manifests this turn gets — the four
+assembly statements are `build_dispatcher`:
+
+```python
+from cogno_cortex import build_dispatcher
+
+dispatcher = build_dispatcher(manifests, backend=llm_backend, metadata={"scope": scope})
+```
+
+It builds a fresh registry + bus per call, wires a `LocalProvider` (pass `providers=` for
+your own), registers every manifest on **both** halves, and returns the bare
+`CortexDispatcher`. The two halves are the reason it exists: registering in one and
+forgetting the other is silent in opposite directions — a skill that ranks and cannot run,
+or one that runs and is never offered. It decides nothing; a caller that gates writes or
+filters by tenant wraps the result.
+
 ## Skills + MCP + native tools together
 
 A persona may draw tools from several sources at once. Each source is a

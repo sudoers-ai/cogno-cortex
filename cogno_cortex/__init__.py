@@ -15,7 +15,7 @@ from cogno_cortex.bus import (
     SkillNotFoundError,
     SkillProvider,
 )
-from cogno_cortex.dispatcher import CortexDispatcher
+from cogno_cortex.dispatcher import CortexDispatcher, build_dispatcher
 from cogno_cortex.loader import (
     discover,
     load_skill_dir,
@@ -37,6 +37,7 @@ __all__ = [
     "LocalProvider",
     "SkillNotFoundError",
     "CortexDispatcher",
+    "build_dispatcher",
     "discover",
     "load_skill_dir",
     "register_all",

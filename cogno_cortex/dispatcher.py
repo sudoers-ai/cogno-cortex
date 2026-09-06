@@ -21,8 +21,10 @@ from typing import Any, Optional, Sequence
 from cogno_anima.types import ToolResult
 
 from cogno_cortex.base import ToolContext
-from cogno_cortex.bus import SkillBus, SkillNotFoundError
+from cogno_cortex.bus import LocalProvider, SkillBus, SkillNotFoundError, SkillProvider
+from cogno_cortex.loader import register_all
 from cogno_cortex.registry import SkillRegistry
+from cogno_cortex.types import SkillManifest
 
 
 class CortexDispatcher:
@@ -98,3 +100,47 @@ class CortexDispatcher:
     def requires_confirmation(self, name: str) -> bool:
         m = self._manifest(name)
         return bool(m.destructive) if m else False
+
+
+def build_dispatcher(
+    manifests: Sequence[SkillManifest],
+    *,
+    names: Optional[Sequence[str]] = None,
+    backend: Any = None,
+    metadata: Optional[dict] = None,
+    trace_id: str = "",
+    providers: Optional[Sequence[SkillProvider]] = None,
+) -> CortexDispatcher:
+    """Manifests in, a ready :class:`CortexDispatcher` out — the four lines everybody writes.
+
+    A registry (for ranking + policy flags) and a bus (for execution) are not two decisions:
+    every skill a caller registers has to reach BOTH, and ``register_all`` exists because
+    registering in one and forgetting the other is a skill that ranks and cannot run, or runs
+    and never gets offered. Assembling them is therefore not a place where callers differ —
+    it is the same four statements in this library's README, in its example, in three of its
+    unit tests and in an integration test, and once more in the host that drove this helper
+    out, whose fourteen call sites all funnel through that single copy. A shape repeated that
+    often with no variation belongs to the library, not to each caller.
+
+    ``providers`` defaults to a single :class:`~cogno_cortex.bus.LocalProvider` (in-process
+    ``tool_class`` execution), which is what a skill authored as a ``BaseTool`` needs. It is a
+    parameter rather than a hardcoded choice because the bus takes several: a caller adding a
+    remote provider would otherwise have to abandon this helper and hand-roll the assembly
+    again, which is the fork this function exists to prevent.
+
+    The remaining arguments are :class:`CortexDispatcher`'s own and mean exactly what they
+    mean there — ``names`` limits what is exposed this turn (``None`` → every registered
+    skill), ``backend`` is the ``LLMBackend`` each skill's ``ToolContext`` receives,
+    ``metadata`` is the extra context handed to every skill, ``trace_id`` the correlation id.
+
+    Nothing here is a policy: it composes what the caller passed and returns the bare
+    dispatcher. A caller that gates writes, filters by tenant, or wraps the result in
+    anything wraps THIS — the assembly is mechanical, and what may be executed is not.
+    """
+    registry = SkillRegistry()
+    bus = SkillBus()
+    for provider in (providers if providers is not None else [LocalProvider()]):
+        bus.register_provider(provider)
+    register_all(list(manifests), registry, bus)
+    return CortexDispatcher(registry, bus, names=names, backend=backend,
+                            metadata=metadata, trace_id=trace_id)

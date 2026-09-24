@@ -74,11 +74,36 @@ dispatcher = CompositeDispatcher([cortex_dispatcher, mcp_dispatcher, native_disp
 ## 6. Feedback + metering
 
 `SkillRegistry.apply_feedback(name, "good"|"bad"|"dangerous")` nudges a skill's
-`performance_rating` (a ranking tie-breaker). `SkillResult.usage` carries token
-counts for LLM-driven skills — feed them to `cogno-meter`; cortex does not meter or
-price (manifest `pricing_model`/`unit_cost` are metadata only).
+`performance_rating` (a ranking tie-breaker). cortex does not meter or price (manifest
+`pricing_model`/`unit_cost` are metadata only).
 
-## 7. What stays yours
+`SkillResult.usage` carries token counts for LLM-driven skills — but only to a caller that
+invokes the skill through the **bus** directly. Through `CortexDispatcher` it never reaches you:
+`execute()` maps a `SkillResult` to cogno-anima's `ToolResult`, which carries the output text,
+`ok`, `error`, `side_effect` and `needs_confirmation`, and has no usage field. A skill whose usage
+must reach a ledger hands it back through a container **you pre-place** in its metadata (the
+turn's metadata is copied shallowly on the way in, so a pre-placed object is the same object all
+the way down) — `consult_documents` does exactly that with `DocumentsAccess.records`.
+
+## 7. `consult_documents` (extra `documents`)
+
+A generic skill over a `cogno_engram.DocumentStore` — see
+[`CONSULT_DOCUMENTS.md`](CONSULT_DOCUMENTS.md). What you wire, per turn and per reader:
+
+1. build a `DocumentsAccess` with YOUR store, embedder (and its `embed_model_label`), the
+   owner key you composed, the reader's profile, the two floors, the contact's raw turn, the
+   turn's exposed tool names and a fresh list for the records;
+2. `manifest = await offer_consult_documents(access)` — `None` means this reader has nothing
+   readable: do not offer the tool (and do not list it in a scope guard's tool table);
+3. `build_dispatcher([manifest], metadata={META_DOCUMENTS_ACCESS: access})` and merge it like any
+   other source;
+4. after the turn, each `ConsultRecord` in the list is one call: bill `embedding_tokens`
+   (`usage_reported=False` means the count is UNKNOWN, not zero).
+
+The profile is applied by the store on every search, so the tool never reads more than the
+executing access may — but choosing the profile, the owner key and the floors is yours.
+
+## 8. What stays yours
 
 Concrete skills (the product), shell/http/remote providers, persona selection
 (`cogno-persona`), RBAC, metering, MCP transport. cortex is the framework; you bring

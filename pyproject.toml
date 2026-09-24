@@ -1,7 +1,7 @@
 [project]
 name = "cogno-cortex"
 version = "0.1.0"
-description = "The in-process skills framework for the Cogno stack — author skills as BaseTool + manifest, rank them against NER tags, execute via a provider bus, discover from disk, and bridge to cogno-anima's tool contract via CortexDispatcher. The framework, not the skills; infra-agnostic."
+description = "The in-process skills framework for the Cogno stack — author skills as BaseTool + manifest, rank them against NER tags, execute via a provider bus, discover from disk, and bridge to cogno-anima's tool contract via CortexDispatcher. The framework, plus a few generic business-free skills behind extras (consult_documents); infra-agnostic."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
@@ -35,7 +35,17 @@ Repository = "https://github.com/sudoers-ai/cogno-cortex"
 Issues = "https://github.com/sudoers-ai/cogno-cortex/issues"
 
 [project.optional-dependencies]
+# `cogno_cortex.skills.consult_documents` searches a `cogno_engram.DocumentStore`. OPTIONAL on
+# purpose: the framework never imports it (`import cogno_cortex` works without engram — pinned by
+# `tests/unit/test_consult_documents.py::test_importing_cortex_does_not_import_the_documents_extra`);
+# only importing the skill module makes it a requirement. The document store arrived on engram's
+# `main` after the 0.1.1 release, so CI installs it from git until a release carries it.
+documents = ["cogno-engram>=0.1.1,<0.2"]
 dev = [
+    # A HARD test dependency, never an `importorskip`: the skill's tests run against the REAL
+    # `InMemoryDocumentStore`, and a suite that skips itself when the store is missing is green
+    # over nothing.
+    "cogno-engram>=0.1.1,<0.2",
     "pytest>=8.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=5.0",

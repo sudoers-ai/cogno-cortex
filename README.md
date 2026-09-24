@@ -106,6 +106,38 @@ The `ToolDispatcher` contract is the unifier — skill / MCP / native are just
 sources behind it. The persona declares modules **by name**; the host resolves each
 to a source and composes.
 
+## Generic skills (behind extras)
+
+cortex ships the framework and, behind an extra each, the rare skill that is pure MECHANISM —
+it knows no tenant, persona, plan or price, and takes everything that decides who may read what
+as an injected parameter. Nothing under `cogno_cortex.skills` is imported by `import cogno_cortex`.
+
+| Skill | Extra | What it does |
+|---|---|---|
+| `consult_documents` | `documents` (pulls `cogno-engram`) | searches a `cogno_engram.DocumentStore`: passages with provenance, or an honest "nothing relevant" |
+
+```bash
+pip install "cogno-cortex[documents]"
+```
+
+```python
+from cogno_cortex import build_dispatcher
+from cogno_cortex.skills.consult_documents import (
+    META_DOCUMENTS_ACCESS, DocumentsAccess, offer_consult_documents)
+
+records = []                                   # pre-placed: one ConsultRecord per call
+access = DocumentsAccess(store=store, embedder=embedder, embed_model=label,
+                         owner_key=owner, profile=reader_profile,
+                         hybrid_floor=H, lexical_floor=L,        # required — calibrate them
+                         user_text=raw_turn, records=records)
+manifest = await offer_consult_documents(access)   # None → nothing readable → not offered
+if manifest is not None:
+    source = build_dispatcher([manifest], metadata={META_DOCUMENTS_ACCESS: access})
+```
+
+The full contract — floors, the two fused searches, the record, what the host owns — is in
+[`docs/CONSULT_DOCUMENTS.md`](docs/CONSULT_DOCUMENTS.md).
+
 ## What stays at the host
 
 The concrete skills (shell/web/browser/...), shell/http/remote **providers**
@@ -130,9 +162,10 @@ you can assemble a body of your own.
 ## Development
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[dev,documents]"   # dev pulls cogno-engram: the skill tests use its real store
 pytest tests/unit -q            # fast, no network
-pytest tests/integration -q     # real EGO over Ollama, auto-skips if absent
+pytest tests/integration -q     # real EGO over Ollama, auto-skips if absent; the Postgres
+                                # leg needs CORTEX_TEST_PG_DSN naming a *test* database
 ruff check cogno_cortex tests && mypy cogno_cortex
 python examples/host_min.py     # offline demo: discover → rank → bridge → execute
 ```

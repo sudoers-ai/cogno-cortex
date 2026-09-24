@@ -43,7 +43,10 @@ jobs:
           pip install "cogno-homeo @ git+https://github.com/sudoers-ai/cogno-homeo.git"
           pip install "cogno-synapse @ git+https://github.com/sudoers-ai/cogno-synapse.git"
           pip install "cogno-anima @ git+https://github.com/sudoers-ai/cogno-anima.git"
-          pip install -e ".[dev]"
+          # The `documents` extra (consult_documents) — engram's document store is on main, not
+          # yet in a release. `[postgres]` so mypy and the Postgres leg see the real adapter.
+          pip install "cogno-engram[postgres] @ git+https://github.com/sudoers-ai/cogno-engram.git"
+          pip install -e ".[dev,documents]"
       - name: Lint (ruff)
         run: ruff check cogno_cortex tests examples
       - name: Type-check (mypy)
@@ -52,3 +55,41 @@ jobs:
         run: pytest tests/unit -q --cov=cogno_cortex --cov-report=term-missing --cov-fail-under=90
       - name: Integration tests (auto-skip without Ollama)
         run: pytest tests/integration -q
+
+  integration-postgres:
+    # consult_documents against the REAL PostgresDocumentStore — the scoring scale the floors are
+    # calibrated on (ts_rank_cd + pgvector) exists only there. Its own job, so the Postgres leg
+    # RUNS here instead of skipping: the test skips without CORTEX_TEST_PG_DSN, and a skip is an
+    # absence of measurement.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          # The test refuses any database whose name does not say "test" (it DROPs kb_* tables).
+          POSTGRES_DB: cortex_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install "cogno-homeo @ git+https://github.com/sudoers-ai/cogno-homeo.git"
+          pip install "cogno-synapse @ git+https://github.com/sudoers-ai/cogno-synapse.git"
+          pip install "cogno-anima @ git+https://github.com/sudoers-ai/cogno-anima.git"
+          pip install "cogno-engram[postgres] @ git+https://github.com/sudoers-ai/cogno-engram.git"
+          pip install -e ".[dev,documents]"
+      - name: consult_documents over Postgres
+        env:
+          CORTEX_TEST_PG_DSN: postgresql://postgres:postgres@localhost:5432/cortex_test
+        run: pytest tests/integration/test_consult_documents_postgres.py -q -rs

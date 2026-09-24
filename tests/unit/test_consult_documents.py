@@ -270,24 +270,44 @@ async def test_an_embedder_down_degrades_to_words_and_the_lexical_floor():
     assert rec.embedding_calls == 1 and not rec.usage_reported
 
 
+async def test_an_embedder_answering_the_wrong_width_is_treated_as_down():
+    st = store()
+    await publish(st, chunks=[SAT])
+    acc = access(st, embedder=KeyedEmbedder(width=DIM + 1), hybrid_floor=0.99)
+    res = await run(acc, "saturday")
+    rec = acc.records[0]
+    assert res.ok and "We open" in res.payload                # never a crashed search
+    assert rec.lexical and EMBED_UNAVAILABLE in rec.degradations and rec.embedding_calls == 1
+    assert rec.usage_reported and rec.embedding_tokens == 2   # the call happened and was reported
+
+
 async def test_a_failed_embedding_sends_BOTH_searches_without_a_vector():
     """Rule 3: the contact's words embedded fine, the model's query did not — the search that
     HAD a vector must still go out without it, or the two results are on two scales."""
     st = store()
     await publish(st, chunks=[SAT])
+    user, model = "saturday evening", "saturday evening hours"
     spy = SpyStore(st)
-    emb = KeyedEmbedder(fail_on="saturday hours")
-    acc = access(spy, embedder=emb, user_text="saturday")
-    await run(acc, "saturday hours")
-    assert emb.calls == ["saturday", "saturday hours"]      # the first one DID produce a vector
+    emb = KeyedEmbedder(fail_on=model)
+    acc = access(spy, embedder=emb, user_text=user, hybrid_floor=0.9, lexical_floor=0.3)
+    await run(acc, model)
+    rec = acc.records[0]
+    # ONE scale, asserted FIRST (the outcome, before the mechanism): the passage scores its WORDS
+    # (the better of 1/2 and 1/3) — never the 0.8 the contact's words would have scored WITH the
+    # vector they did get (0.6·1 + 0.4·1/2).
+    hybrid = (await st.search(OWNER, profile="EMPLOYEE", text=user, vector=NEUTRAL,
+                              embed_model=MODEL_A)).hits
+    assert hybrid[0].score == pytest.approx(0.8)             # the mixture is producible here
+    assert rec.scores == (0.5,)
+    assert rec.lexical and rec.floor == 0.3 and EMBED_UNAVAILABLE in rec.degradations
+    # …and the mechanism: the search that HAD a vector went out without it.
+    assert emb.calls == [user, model]                        # the first one DID produce a vector
     assert [s["vector"] for s in spy.searches] == [None, None]
     assert [s["embed_model"] for s in spy.searches] == [None, None]
-    rec = acc.records[0]
-    assert rec.lexical and EMBED_UNAVAILABLE in rec.degradations
-    assert rec.embedding_calls == 2 and rec.embedding_tokens == 2 and not rec.usage_reported
+    assert rec.embedding_calls == 2 and rec.embedding_tokens == 3 and not rec.usage_reported
 
     spy_ok = SpyStore(st)                                    # CONTROL: both embed → both carry
-    await run(access(spy_ok, user_text="saturday"), "saturday hours")
+    await run(access(spy_ok, user_text=user), model)
     assert all(s["vector"] is not None for s in spy_ok.searches) and len(spy_ok.searches) == 2
 
 

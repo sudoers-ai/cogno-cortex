@@ -41,6 +41,23 @@ every caller ships. The two fused searches are always on ONE scale: if either em
 both searches run without a vector; if the store marks either result lexical, every passage is
 scored by its ``lexical_score``.
 
+**A second gate in HYBRID mode: lexical EVIDENCE.** The vector half of a hybrid score measures
+TOPIC, and topic alone can carry a passage over the floor: a question about something the
+documents never mention («is there parking?») lands near the passage about the nearest thing
+they do mention (the address, the opening hours), and a floor on the fused score cannot tell the
+two apart — measured on a reference host, the zero-loss floor of one corpus cut real answers in
+another, so no absolute floor serves both. So, in hybrid mode, among the passages that CLEAR the
+floor at least one must also share the question's words: its ``lexical_score`` (the store's own
+lexical measure, under the store's own text fold — the one its index uses) must reach
+``DocumentsAccess.lexical_evidence_floor``, or the reading is *nothing relevant* and the record
+says which gate cut it (:data:`CUT_LEXICAL_EVIDENCE`, against :data:`CUT_FLOOR`). The gate is
+on the SET that cleared the floor, never on its first passage, and it only decides — when it
+lets the reading through, the passages shown and their order are exactly the ones the floor
+alone would have shown. It does not apply to a lexical result: there the floor already IS a
+lexical threshold. **Its price, said plainly:** a passage that answers the question purely by
+paraphrase — no word in common with either text searched — is now *nothing relevant*. Like the
+two floors it is REQUIRED with no default (a measured number, per scale); ``0`` switches it off.
+
 **An embedder failure never kills the turn; a store failure is never "nothing written".** The
 embedder only helps FIND passages, so losing it degrades the search to words
 (``cogno_anima.vocab.EMBED_UNAVAILABLE`` on the record) and the contact still gets an answer.
@@ -124,6 +141,11 @@ OUTCOME_SEARCH_FAILED = "search_failed"        # the store raised — NOT an abs
 VALID_OUTCOMES: frozenset[str] = frozenset({OUTCOME_HITS, OUTCOME_NOTHING_RELEVANT,
                                             OUTCOME_SEARCH_FAILED})
 
+#: Which gate said «nothing relevant» — the closed alphabet of :attr:`ConsultRecord.cut_by`.
+CUT_FLOOR = "floor"                          # no passage cleared the floor
+CUT_LEXICAL_EVIDENCE = "lexical_evidence"    # some did, and none of them shares the question's words
+VALID_CUTS: frozenset[str] = frozenset({CUT_FLOOR, CUT_LEXICAL_EVIDENCE})
+
 #: Budget defaults — a SAFE mechanism default, not a product decision. The store cuts chunks of
 #: ~2000 characters (``cogno_engram.chunking``), so one excerpt fits whole; three of them plus
 #: their headers fit the answer. A caller with another window passes its own numbers.
@@ -165,6 +187,11 @@ class ConsultRecord:
     (the passages that PASSED the floor, best first) and says which variant gave each one.
     ``shown`` is how many of those fitted the answer budget. ``degradations`` are the store's
     marks plus :data:`cogno_anima.vocab.EMBED_UNAVAILABLE` when the embedder could not be used.
+    ``lexical_scores`` runs parallel to ``scores`` (each passed passage's ``lexical_score``).
+    ``lexical_evidence`` is the highest ``lexical_score`` among the passages that CLEARED the
+    floor — ``None`` on a lexical result or when none cleared it. ``cut_by`` says which gate
+    produced a *nothing relevant* (:data:`VALID_CUTS`); ``None`` when the reading had hits or the
+    search failed.
     """
 
     embed_model: str
@@ -181,6 +208,9 @@ class ConsultRecord:
     scores: tuple[float, ...] = ()
     below_floor: int = 0
     shown: int = 0
+    lexical_scores: tuple[float, ...] = ()
+    lexical_evidence: Optional[float] = None
+    cut_by: Optional[str] = None
 
 
 def _unit(name: str, value: object) -> float:
@@ -214,6 +244,8 @@ class DocumentsAccess:
     * ``embed_model`` — the label of THIS embedder (``cogno_engram.embed_model_label``); it
       must declare the store's width, or ``ValueError``.
     * ``hybrid_floor`` / ``lexical_floor`` — REQUIRED, in ``[0, 1]``; see the module docstring.
+    * ``lexical_evidence_floor`` — REQUIRED, in ``[0, 1]``: in hybrid mode, the ``lexical_score``
+      at least one passage that cleared the floor must reach (module docstring); ``0`` = off.
     * ``user_text`` — the contact's RAW turn, searched beside the model's ``query``. Used to
       FIND, never rendered: nothing of it enters the payload, the record or a log line.
     * ``tool_names`` — the turn's exposed tool set, for :func:`sanitize_untrusted` (this tool's
@@ -229,6 +261,7 @@ class DocumentsAccess:
     profile: str
     hybrid_floor: float
     lexical_floor: float
+    lexical_evidence_floor: float
     user_text: str = ""
     limit: int = DEFAULT_LIMIT
     max_excerpt_chars: int = DEFAULT_MAX_EXCERPT_CHARS
@@ -252,6 +285,8 @@ class DocumentsAccess:
             model_dimensions(self.embed_model)
         object.__setattr__(self, "hybrid_floor", _unit("hybrid_floor", self.hybrid_floor))
         object.__setattr__(self, "lexical_floor", _unit("lexical_floor", self.lexical_floor))
+        object.__setattr__(self, "lexical_evidence_floor",
+                           _unit("lexical_evidence_floor", self.lexical_evidence_floor))
         _bounded_int("limit", self.limit, 1, MAX_LIMIT)
         _bounded_int("max_excerpt_chars", self.max_excerpt_chars, MIN_EXCERPT_CHARS)
         _bounded_int("max_answer_chars", self.max_answer_chars, MIN_ANSWER_CHARS)
@@ -581,17 +616,33 @@ class ConsultDocumentsTool(BaseTool):
         lexical = not vectors or KB_EMBED_SPACE_UNAVAILABLE in marks
         floor = access.lexical_floor if lexical else access.hybrid_floor
         fused = _fuse(results, lexical=lexical)
-        passed = [f for f in fused if f.score >= floor][:access.limit]
-        below = sum(1 for f in fused if f.score < floor)
+        cleared = [f for f in fused if f.score >= floor]
+        below = len(fused) - len(cleared)
+        # The second gate (module docstring): in hybrid mode, over the WHOLE set that cleared the
+        # floor — never its first passage — at least one must share the question's words. It only
+        # decides; what is shown, and in which order, is what the floor alone would show.
+        support: Optional[float] = None
+        cut: Optional[str] = None
+        if not cleared:
+            cut = CUT_FLOOR
+        elif not lexical:
+            support = max(float(f.hit.lexical_score) for f in cleared)
+            if support < access.lexical_evidence_floor:
+                cut = CUT_LEXICAL_EVIDENCE
+        passed = [] if cut else cleared[:access.limit]
         usage = {"embedding_tokens": tokens, "embedding_calls": calls}
         base = ConsultRecord(embed_model=access.embed_model, embedding_tokens=tokens,
                              embedding_calls=calls, usage_reported=reported,
                              variants=tuple(v for v, _ in variants), lexical=lexical,
                              floor=floor, outcome=OUTCOME_NOTHING_RELEVANT,
-                             degradations=tuple(marks) + local, below_floor=below)
+                             degradations=tuple(marks) + local, below_floor=below,
+                             lexical_evidence=None if support is None else round(support, 6),
+                             cut_by=cut)
         evidence = [f"variants={'+'.join(base.variants)}",
                     f"floor={'lexical' if lexical else 'hybrid'}:{floor:g}",
                     f"hits={len(passed)}", f"below_floor={below}"] + \
+                   ([f"lexical_evidence={support:g}"] if support is not None else []) + \
+                   ([f"cut_by={cut}"] if cut else []) + \
                    [f"degraded={m}" for m in base.degradations]
         if not passed:
             self._record(access, base)
@@ -606,7 +657,9 @@ class ConsultDocumentsTool(BaseTool):
         self._record(access, replace(
             base, outcome=OUTCOME_HITS, hit_ids=tuple(str(f.hit.id) for f in passed),
             hit_variants=tuple(f.variant for f in passed),
-            scores=tuple(round(f.score, 6) for f in passed), shown=shown))
+            scores=tuple(round(f.score, 6) for f in passed),
+            lexical_scores=tuple(round(float(f.hit.lexical_score), 6) for f in passed),
+            shown=shown))
         return SkillResult(skill_name=CONSULT_DOCUMENTS, status="success", payload=payload,
                            evidence=evidence + [f"chunk={f.hit.id}" for f in passed],
                            usage=usage)
@@ -627,6 +680,9 @@ __all__ = [
     "OUTCOME_NOTHING_RELEVANT",
     "OUTCOME_SEARCH_FAILED",
     "VALID_OUTCOMES",
+    "CUT_FLOOR",
+    "CUT_LEXICAL_EVIDENCE",
+    "VALID_CUTS",
     "DEFAULT_LIMIT",
     "DEFAULT_MAX_EXCERPT_CHARS",
     "DEFAULT_MAX_ANSWER_CHARS",

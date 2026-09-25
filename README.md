@@ -129,6 +129,7 @@ records = []                                   # pre-placed: one ConsultRecord p
 access = DocumentsAccess(store=store, embedder=embedder, embed_model=label,
                          owner_key=owner, profile=reader_profile,
                          hybrid_floor=H, lexical_floor=L,        # required — calibrate them
+                         lexical_evidence_floor=E,               # required too; 0 = off
                          user_text=raw_turn, records=records)
 manifest = await offer_consult_documents(access)   # None → nothing readable → not offered
 if manifest is not None:

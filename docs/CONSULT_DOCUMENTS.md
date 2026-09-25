@@ -37,6 +37,7 @@ from cogno_cortex.skills.consult_documents import (
 | `owner_key` | the store's opaque owner; blank → `ValueError` |
 | `profile` | the READER's label; blank → `ValueError` (there is no wildcard reader) |
 | `hybrid_floor`, `lexical_floor` | **required**, in `[0, 1]` — see *The floor* |
+| `lexical_evidence_floor` | **required**, in `[0, 1]` — see *The evidence gate*; `0` = off |
 | `user_text` | the contact's raw turn; searched beside `query`, never rendered |
 | `limit` | passages asked of the store per search (default 3) |
 | `max_excerpt_chars`, `max_answer_chars` | the budget (defaults 2400 / 7200) |
@@ -79,6 +80,29 @@ its own knowledge that it had no vector). **There is no default**: the values co
 labelled evaluation over the distribution these scores actually have, and a default written here
 first would become the value every caller ships.
 
+## The evidence gate (hybrid mode)
+
+The vector half of a hybrid score measures TOPIC, and topic alone can lift a passage over the
+floor: a question about something the documents never mention lands near the passage about the
+nearest thing they do mention. A floor on the fused score cannot tell the two apart, and one
+measured to lose nothing on one corpus can cut real answers on another. So, **in hybrid mode**,
+among the passages that CLEAR the floor, at least one must also share the question's words — its
+`lexical_score` must reach `lexical_evidence_floor` — or the reading is *nothing relevant*.
+
+* The gate reads the **set** that cleared the floor, never only its first passage.
+* It only **decides**: when it lets the reading through, the passages shown, their order and
+  their scores are exactly the ones the floor alone would give.
+* The word test is the **store's** own lexical measure, under the store's own fold (the one its
+  index uses — `portuguese` + `unaccent` on Postgres, the general text fold in memory), so
+  *Sábado* and *sabado* are the same evidence.
+* It does **not** apply to a lexical result: there the floor already is a lexical threshold.
+* **Its price:** a passage that answers purely by paraphrase — no word in common with either text
+  searched — is now *nothing relevant*. `0` switches the gate off.
+
+The record says which gate cut (`cut_by`: `floor` | `lexical_evidence`), with the evidence it
+read (`lexical_evidence`, the highest `lexical_score` among the passages that cleared the floor)
+and each shown passage's `lexical_scores`.
+
 ## What the executor reads
 
 ```
@@ -106,11 +130,13 @@ document is saved; this skill cannot tell a name from a word.
 reaches a host that runs the skill through it. So each call appends a `ConsultRecord` to
 `access.records`: `embedding_tokens` (summed over its one or two calls), `embedding_calls`,
 `usage_reported` (`False` = unknown, not zero), the variants searched, which floor, the outcome,
-the degradations, and the ids/scores/variants of the passages that passed — never text. Who pays,
+the degradations, which gate cut a *nothing relevant* (`cut_by`) and the lexical evidence it
+read, and the ids/scores/lexical scores/variants of the passages that passed — never text. Who pays,
 against which allowance, is the host's.
 
 ## What stays with the host
 
-Which store and embedder, the owner key, the reader's profile, the two floor values, the contact's
+Which store and embedder, the owner key, the reader's profile, the two floor values and the
+evidence floor, the contact's
 raw turn, whether the tool is listed in a scope guard's tool table (use the same `offer` result),
 the ledger line for each record, and the publishing rules for documents and titles.

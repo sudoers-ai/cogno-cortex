@@ -93,7 +93,9 @@ class PlainEmbedder:
 def access(st, embedder=None, **kw) -> DocumentsAccess:
     base = dict(store=st, embedder=embedder or KeyedEmbedder(), embed_model=MODEL_A,
                 owner_key=OWNER, profile="EMPLOYEE", hybrid_floor=0.5, lexical_floor=0.3,
-                records=[])
+                # the evidence gate OFF by default: every test that is not about it keeps the
+                # decision it always had (tests/unit/test_consult_documents_lexical_evidence.py)
+                lexical_evidence_floor=0.0, records=[])
     base.update(kw)
     return DocumentsAccess(**base)
 

@@ -30,6 +30,7 @@ from cogno_engram.documents import (
 
 from cogno_cortex import ToolContext
 from cogno_cortex.skills.consult_documents import (
+    CUT_LEXICAL_EVIDENCE,
     META_DOCUMENTS_ACCESS,
     OUTCOME_HITS,
     OUTCOME_NOTHING_RELEVANT,
@@ -113,7 +114,8 @@ async def _publish(st, owner, *, title, profiles, chunks, model=MODEL_A) -> str:
 
 def _access(st, owner, **kw) -> DocumentsAccess:
     base = dict(store=st, embedder=_Embedder(), embed_model=MODEL_A, owner_key=owner,
-                profile="EMPLOYEE", hybrid_floor=0.3, lexical_floor=0.05, records=[])
+                profile="EMPLOYEE", hybrid_floor=0.3, lexical_floor=0.05,
+                lexical_evidence_floor=0.0, records=[])
     base.update(kw)
     return DocumentsAccess(**base)
 
@@ -175,3 +177,34 @@ async def test_the_hybrid_scale_is_what_postgres_returns(pg):
     assert len(rec.scores) == 1 and rec.scores[0] > 0.6
     assert rec.below_floor == 1
     assert "Sábado · page 3" in res.payload
+
+
+# ── the lexical-EVIDENCE gate on the production scale (``ts_rank_cd`` + ``portuguese`` +
+# ``unaccent``): the index's own fold decides what counts as a shared word ─────────────────
+
+async def test_evidence_is_the_same_for_sabado_and_Sabado_under_the_index_fold(pg):
+    owner = f"acme{uuid4().hex[:6]}/front-desk"
+    await _publish(pg, owner, title="Manual", profiles=("EMPLOYEE",), chunks=[SAT])
+    got = {}
+    for typed in ("sábado", "sabado", "SÁBADO"):
+        acc = _access(pg, owner, lexical_evidence_floor=0.01)
+        await _run(acc, typed)
+        rec = acc.records[0]
+        assert rec.outcome == OUTCOME_HITS and not rec.lexical, (typed, rec)
+        got[typed] = rec.lexical_evidence
+    assert len(set(got.values())) == 1 and next(iter(got.values())) > 0.0, got
+
+
+async def test_PRICE_on_postgres_a_paraphrase_with_no_common_word_is_cut(pg):
+    owner = f"acme{uuid4().hex[:6]}/front-desk"
+    await _publish(pg, owner, title="Manual", profiles=("EMPLOYEE",), chunks=[SAT])
+    q = "funcionamento no fim de semana"  # the same topic (the same vector), no common lexeme
+    off = _access(pg, owner, hybrid_floor=0.5)
+    res = await _run(off, q)
+    assert off.records[0].outcome == OUTCOME_HITS and "abrimos das 8h" in res.payload  # CONTROL
+    assert off.records[0].lexical_scores == (0.0,)
+    on = _access(pg, owner, hybrid_floor=0.5, lexical_evidence_floor=0.05)
+    res = await _run(on, q)
+    rec = on.records[0]
+    assert rec.outcome == OUTCOME_NOTHING_RELEVANT and "abrimos" not in res.payload
+    assert rec.cut_by == CUT_LEXICAL_EVIDENCE and rec.lexical_evidence == 0.0

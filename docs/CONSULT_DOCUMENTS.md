@@ -129,10 +129,12 @@ document is saved; this skill cannot tell a name from a word.
 `CortexDispatcher` carries only the result text to the executor — `SkillResult.usage` never
 reaches a host that runs the skill through it. So each call appends a `ConsultRecord` to
 `access.records`: `embedding_tokens` (summed over its one or two calls), `embedding_calls`,
-`usage_reported` (`False` = unknown, not zero), the variants searched, which floor, the outcome,
-the degradations, which gate cut a *nothing relevant* (`cut_by`) and the lexical evidence it
-read, and the ids/scores/lexical scores/variants of the passages that passed — never text. Who pays,
-against which allowance, is the host's.
+`usage_reported` (`False` = unknown, not zero), the variants searched (their LABELS, `user` /
+`model` — never the texts), which floor, the outcome, the degradations, how many fused passages
+the floor cut (`below_floor`), which gate cut a *nothing relevant* (`cut_by`) and the lexical
+evidence it read, the ids/scores/lexical scores/variants of the passages that passed, and how
+many of those fitted the answer (`shown`) — never text (`ConsultRecord`, pinned in
+`tests/unit/test_consult_documents.py`). Who pays, against which allowance, is the host's.
 
 ## What stays with the host
 

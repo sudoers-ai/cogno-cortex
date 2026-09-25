@@ -91,8 +91,9 @@ A generic skill over a `cogno_engram.DocumentStore` — see
 [`CONSULT_DOCUMENTS.md`](CONSULT_DOCUMENTS.md). What you wire, per turn and per reader:
 
 1. build a `DocumentsAccess` with YOUR store, embedder (and its `embed_model_label`), the
-   owner key you composed, the reader's profile, the two floors, the contact's raw turn, the
-   turn's exposed tool names and a fresh list for the records;
+   owner key you composed, the reader's profile, the two floors AND the lexical evidence floor
+   (`lexical_evidence_floor`, required since #10; `0` switches the gate off), the contact's raw
+   turn, the turn's exposed tool names and a fresh list for the records;
 2. `manifest = await offer_consult_documents(access)` — `None` means this reader has nothing
    readable: do not offer the tool (and do not list it in a scope guard's tool table);
 3. `build_dispatcher([manifest], metadata={META_DOCUMENTS_ACCESS: access})` and merge it like any
@@ -101,7 +102,9 @@ A generic skill over a `cogno_engram.DocumentStore` — see
    (`usage_reported=False` means the count is UNKNOWN, not zero).
 
 The profile is applied by the store on every search, so the tool never reads more than the
-executing access may — but choosing the profile, the owner key and the floors is yours.
+executing access may — but choosing the profile, the owner key and the three floors is yours.
+Each record says which gate produced a *nothing relevant* (`cut_by`: `floor` |
+`lexical_evidence`) — see `CONSULT_DOCUMENTS.md` § *The evidence gate*.
 
 ## 8. What stays yours
 

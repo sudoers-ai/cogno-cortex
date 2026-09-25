@@ -183,10 +183,14 @@ class ConsultRecord:
     ``embedding_tokens``/``embedding_calls`` are what the embedder REPORTED, summed over this
     execute's calls; ``usage_reported`` is ``False`` when any call happened without a token count
     (an embedder with no ``embed_with_usage``, or one that raised) — "unknown" is not zero.
-    ``variants`` are the texts searched; ``hit_variants`` runs parallel to ``hit_ids``/``scores``
-    (the passages that PASSED the floor, best first) and says which variant gave each one.
-    ``shown`` is how many of those fitted the answer budget. ``degradations`` are the store's
-    marks plus :data:`cogno_anima.vocab.EMBED_UNAVAILABLE` when the embedder could not be used.
+    ``variants`` are the LABELS of the texts searched, in search order (:data:`VARIANT_USER` /
+    :data:`VARIANT_MODEL`) — never the texts themselves, which are the contact's words and the
+    model's query. ``hit_variants`` runs parallel to ``hit_ids``/``scores`` (the passages that
+    PASSED — the floor and, in hybrid mode, the evidence gate — best first, at most
+    ``DocumentsAccess.limit``) and says which variant gave each one. ``below_floor`` counts the
+    fused passages the floor cut. ``shown`` is how many of the passed ones fitted the answer
+    budget. ``degradations`` are the store's marks plus
+    :data:`cogno_anima.vocab.EMBED_UNAVAILABLE` when the embedder could not be used.
     ``lexical_scores`` runs parallel to ``scores`` (each passed passage's ``lexical_score``).
     ``lexical_evidence`` is the highest ``lexical_score`` among the passages that CLEARED the
     floor — ``None`` on a lexical result or when none cleared it. ``cut_by`` says which gate

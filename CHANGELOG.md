@@ -4,6 +4,22 @@
 
 ### Added
 
+- **`consult_documents`: a second gate in HYBRID mode, on lexical EVIDENCE.** Among the passages
+  that clear the hybrid floor, at least one must share the question's words (its store-side
+  `lexical_score` ≥ `DocumentsAccess.lexical_evidence_floor`), or the reading is *nothing
+  relevant*. `lexical_evidence_floor` is **required** with no default, like the two floors (`0`
+  switches the gate off). The gate reads the SET that cleared the floor, never only its first
+  passage; it only decides — what is shown, and in which order, is unchanged; it does not apply
+  to a lexical result; and the word test is the store's own, under the index's fold (*Sábado* =
+  *sabado*). `ConsultRecord` gains `cut_by` (`floor` | `lexical_evidence`, closed:
+  `VALID_CUTS`), `lexical_evidence` and `lexical_scores` (parallel to `scores`). **Breaking** for
+  a caller that builds `DocumentsAccess`: the new field is required.
+  **Risk, declared:** a passage that answers purely by paraphrase — no word in common with
+  either text searched — is now *nothing relevant*; `test_PRICE_*` produce that loss on purpose
+  (in memory and on Postgres). Why a gate and not a higher floor: a topic-only match can carry an
+  unanswerable question over the fused floor, and on a reference host the zero-loss floor of one
+  corpus cut real answers in another.
+
 - **`cogno_cortex.skills.consult_documents`** — the first GENERIC skill shipped with the framework
   (extra `documents`, which pulls `cogno-engram`): searches a `cogno_engram.DocumentStore` on
   demand and returns passages with provenance (`id · document › section · page`), or says plainly

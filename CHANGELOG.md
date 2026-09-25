@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Changed (docs)
+
+- **Phase 2 docs sweep B — `consult_documents` after the evidence gate (#10).**
+  `ConsultRecord`'s docstring said `variants` are "the texts searched"; the code stores their
+  LABELS (`user` / `model`, `tests/unit/test_consult_documents.py`), never the texts. It now says
+  so, and names what it did not: `below_floor`, the evidence gate among what makes a passage
+  "pass", and the `limit` cap. `docs/HOST_INTEGRATION.md` §7 listed "the two floors" to wire —
+  `lexical_evidence_floor` is required since #10 — and now names the three and `cut_by`.
+  `docs/CONSULT_DOCUMENTS.md` § *What it spends* adds `below_floor` and `shown` and says the
+  variants are labels. Docs and a docstring only; no behaviour changes.
+
 ### Added
 
 - **`consult_documents`: a second gate in HYBRID mode, on lexical EVIDENCE.** Among the passages

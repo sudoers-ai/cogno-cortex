@@ -208,3 +208,30 @@ async def test_PRICE_on_postgres_a_paraphrase_with_no_common_word_is_cut(pg):
     rec = on.records[0]
     assert rec.outcome == OUTCOME_NOTHING_RELEVANT and "abrimos" not in res.payload
     assert rec.cut_by == CUT_LEXICAL_EVIDENCE and rec.lexical_evidence == 0.0
+
+
+async def test_WHOLE_on_postgres_the_served_document_whole_and_a_forged_id_reads_nothing(pg):
+    """P9 over the REAL reader path: ``read_served`` as SQL (the one ``_SERVED`` filter) reads
+    the document of the shown passage whole — a section no passage matched included — and a
+    forged ``document`` of another profile reads nothing (its CONTROL: the profile it is published
+    to reads it by the same call)."""
+    from cogno_cortex.skills.consult_documents import (MODE_DOCUMENT, OUTCOME_CONTINUED,
+                                                       OUTCOME_UNREADABLE)
+    owner = f"acme{uuid4().hex[:6]}/front-desk"
+    manual = await _publish(pg, owner, title="Manual interno", profiles=("EMPLOYEE",), chunks=[
+        SAT, ("Taxa de inscrição: NONHIT-MARCA-7.", ("Preços",), 3, NEUTRAL)])
+    staff_only = await _publish(pg, owner, title="Notas da direção", profiles=("ADMIN",),
+                                chunks=[("Orçamento ZETA-ADMIN-MARCA.", ("Notas",), 1, NEUTRAL)])
+    whole = dict(whole_doc_chars=12000, max_whole_chars=24000)
+    staff = _access(pg, owner, **whole)
+    res = await _run(staff, "sábado")
+    assert staff.records[-1].mode == MODE_DOCUMENT and staff.records[-1].whole_ids == (manual,)
+    assert "NONHIT-MARCA-7" in res.payload and "abrimos das 8h" in res.payload
+    forged = await ConsultDocumentsTool(query="x", document=staff_only).run(
+        ToolContext(metadata={META_DOCUMENTS_ACCESS: staff}))
+    assert forged.status == "error" and "ZETA-ADMIN" not in (forged.payload or "")
+    assert staff.records[-1].outcome == OUTCOME_UNREADABLE
+    admin = _access(pg, owner, profile="ADMIN", **whole)
+    ok = await ConsultDocumentsTool(query="x", document=staff_only).run(
+        ToolContext(metadata={META_DOCUMENTS_ACCESS: admin}))
+    assert "ZETA-ADMIN-MARCA" in ok.payload and admin.records[-1].outcome == OUTCOME_CONTINUED

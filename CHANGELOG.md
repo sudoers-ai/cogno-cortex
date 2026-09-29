@@ -2,6 +2,79 @@
 
 ## Unreleased
 
+### Added — P9: `consult_documents` reads a document WHOLE (needs cogno-engram with `read_served`, #76)
+
+- **Why, measured** (a reference host, 20 labelled questions over the documents it serves): the
+  best-3 passages carried the expected content completely in **16/20** («summarise the syllabus»
+  got 1 of its 2 blocks, the curriculum grid missing); reading the documents of the shown
+  passages whole, **20/20**; the documents served there are small (the largest ~2.1 k tokens).
+  The owner's order: «quando a persona tiver documentos, o sistema consiga fazer a leitura
+  completa dele».
+- **`DocumentsAccess.max_whole_chars`** (default `0` = off), **`whole_doc_chars`** (default `0`)
+  and **`section_mode`** (default `False`), validated at construction (a whole budget needs a
+  store with `read_served`; `whole_doc_chars` ≤ the budget; a budget ≥ `MIN_ANSWER_CHARS`).
+- **Document mode**: for the documents of the passages that PASSED, in the order of their best
+  passage, a document with at most `whole_doc_chars` of text is shown as ONE excerpt — section
+  headings in line, the chunks' overlap said once (`cogno_engram.chunking.join_passages`) — while
+  it fits the budget; the others keep their passages; what fits nowhere is counted.
+- **`whole: true`** (optional argument, «when the contact asks for the summary or the complete
+  content of a document»): whole whatever the size, up to the budget; a document the budget cuts
+  ends with `[continues: document=<id>, after=<ordinal>]`, and **`document` + `after`** read the
+  next slice (no search, no embedding). The three arguments are in the schema only when the
+  access has a budget (`consult_documents_manifest(..., reading=True)`, passed by
+  `offer_consult_documents`).
+- **Section mode** — OFF by default: the UNION of the level-2 blocks that hold a long document's
+  passages. The block of the best passage alone measured **14/20**, below the passages; the union
+  is here to be measured forced, and enters only if it does not lose to them.
+- **Every whole read is the store's READER path** (`read_served`, the reader's profile, on every
+  call), through ONE seam (`_served_slice`). A forged `document` — another profile's, a draft,
+  another owner's, made up — reads nothing: `status="error"`, outcome `unreadable`, the same
+  answer for all. `version_text`, the administrator's read, is never used.
+- **A negative never expands**: *nothing relevant* returns before any whole read.
+- **Off, or nothing expanded → today's payload, byte for byte** (pinned by digest against the
+  bytes before this change). A whole read that raises keeps the passages and marks
+  `whole_read_unavailable`.
+- **`ConsultRecord`** gains `mode` (`passages` | `section` | `document`, closed: `VALID_MODES`),
+  `whole_ids`, `continued`, `has_more`, `whole_requested`; outcomes `continued` and
+  `unreadable` join `VALID_OUTCOMES`; `shown` counts the passed passages the answer COVERS.
+  `hit_ids`, `cut_by` and the scores are as before.
+- **Tests** — `tests/unit/test_consult_documents_whole_read.py` (37, invented data):
+  - the twin: a small document of the shown passages read whole, every item once (48 + 16);
+    control: reading off, the best-3 miss the grid, and chunk by chunk the overlap IS there;
+  - byte identity, 3 settings × 5 digests computed before the change;
+  - **a negative never expands** (floor cut and evidence cut): no whole read, the legacy
+    payload; control: the positive question reads the non-hit section;
+  - **another profile, never** — by `whole: true`, by a forged `document`, by a forged
+    `profile`; the answer equals a made-up id's; control: the ADMIN reads it by the same call;
+  - **a draft, never** — beside the served version and alone; control: `version_text` shows it;
+  - a long document: whole on request, cut, continued to its end, every item once;
+  - a long one keeps its passages when nobody asks;
+  - section mode forced: both blocks, nothing between; control: off by default;
+  - the budget: one whole, one in passages;
+  - the schema only when reading; the access refusals; a failing read keeps the passages;
+  - the arguments coerced, never a crash; without a budget they are ignored;
+  - **injection through the WHOLE read** (the #13 review): a document whose text and headings
+    carry a `<TOOL_CALL>` and forged `<excerpt …>`/`</excerpt>` fences (upper case and spaced
+    too), read in document mode, with `whole: true` and by continuation — no call that parses,
+    the fences neutralised, exactly ONE opening and ONE closing fence; control: the served text
+    IS hostile. The injection tests before covered the passages only.
+
+  Plus one Postgres test (`tests/integration/test_consult_documents_postgres.py`, CI job
+  `integration-postgres`): the whole read and the forged id over the real reader path.
+- **Mutations, by hand** (anchor `grep -cxF` = 1, `ast.parse`, red, reverted):
+  - the reader seam swapped for the administrator's `version_text` →
+    `test_TWIN_another_profiles_document_never_appears_not_even_by_a_forged_document_id`;
+  - the evidence gate dropped (`passed = cleared[:limit]`) →
+    `test_TWIN_a_nothing_relevant_reading_never_reads_a_document[…lexical_evidence]`;
+  - the section union reduced to the first passage (`for hit in hits[:1]:`) →
+    `test_section_mode_forced_reads_the_union_of_the_blocks_that_hold_the_passages`;
+  - the overlap not removed (`_document_body(g, …)`) →
+    `test_TWIN_a_small_document_of_the_shown_passages_is_read_whole_every_item_said_once`.
+  - the whole path's text not sanitised (`text = _defang(…)` → the raw text) →
+    `test_TWIN_a_hostile_document_read_WHOLE_can_neither_plant_a_call_nor_break_the_fence`
+    (its three cases, nothing else);
+  - The draft rule is the store's (`read_served`), and its mutation is in cogno-engram #76.
+
 ### Changed (docs)
 
 - **Phase 2 docs sweep B — `consult_documents` after the evidence gate (#10).**

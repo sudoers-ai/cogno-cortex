@@ -21,6 +21,8 @@ from cogno_cortex.skills.consult_documents import (
     META_DOCUMENTS_ACCESS,    # "documents_access" — the ONE metadata key the skill reads
     DocumentsAccess,          # what the host injects (frozen, validated at construction)
     ConsultRecord,            # what one call spent and found (content-free)
+    MODE_PASSAGES, MODE_SECTION, MODE_DOCUMENT, VALID_MODES,   # how the documents were shown
+    OUTCOME_CONTINUED, OUTCOME_UNREADABLE,                      # a continuation's outcomes
     offer_consult_documents,  # async: manifest for this reader, or None
     describe_documents,       # pure: the tool description from the readable titles (+ sections)
     consult_documents_manifest,
@@ -43,6 +45,9 @@ from cogno_cortex.skills.consult_documents import (
 | `max_excerpt_chars`, `max_answer_chars` | the budget (defaults 2400 / 7200) |
 | `tool_names` | the turn's exposed tool set, for `sanitize_untrusted` |
 | `records` | a list the host pre-placed; one `ConsultRecord` is appended per call |
+| `max_whole_chars` | the budget of an answer that reads documents whole (P9); `0` (default) = off — no `whole`/`document`/`after` in the schema, the passages byte for byte; when set, ≥ `MIN_ANSWER_CHARS` and the store must have `read_served` |
+| `whole_doc_chars` | a document of the passed passages with at most this much text is read whole without being asked (`0` = only on `whole: true`); ≤ `max_whole_chars` |
+| `section_mode` | for a document longer than `whole_doc_chars`, the union of the level-2 blocks holding its passages; `False` by default (see *Reading a document whole*) |
 
 ## Two gates
 
@@ -129,6 +134,43 @@ The record says which gate cut (`cut_by`: `floor` | `lexical_evidence`), with th
 read (`lexical_evidence`, the highest `lexical_score` among the passages that cleared the floor)
 and each shown passage's `lexical_scores`.
 
+## Reading a document whole (P9)
+
+The best passages answer a question about ONE fact; a summary, a syllabus or «everything the
+document says about X» needs the document. Measured on a reference host over 20 labelled
+questions: the best-3 passages carried the expected content completely in 16, reading the
+documents of the shown passages whole in 20 — the documents served there were small (the largest
+~2.1 k tokens). With `max_whole_chars` set:
+
+* **Document mode.** For the documents of the passages that PASSED, in the order of their best
+  passage: a document whose text is ≤ `whole_doc_chars` is read WHOLE and shown as ONE excerpt
+  (`[n] kb:<document>.<version> · Title · whole document`), its section headings in line
+  (`## Section › Sub · page N`) and the chunks' overlap said once
+  (`cogno_engram.chunking.join_passages`), while it fits `max_whole_chars`. A document that does
+  not fit keeps its passages; what fits nowhere is counted.
+* **`whole: true`** — the optional argument «when the contact asks for the summary or the complete
+  content of a document»: the documents are read whole whatever their size, up to the budget. A
+  document the budget CUTS ends with `[continues: document=<id>, after=<ordinal>]`, outside the
+  excerpt. No extra model call: the executor decides.
+* **Continuation.** `document` + `after` (from that mark) read the next slice — no search, no
+  embedding, the overlap with the slice before said once. Past the end: a success that says the
+  reading had reached its end.
+* **Section mode** (`section_mode`, OFF by default): for a document longer than
+  `whole_doc_chars`, the UNION of the level-2 blocks (`heading_path[:2]`) of ALL its shown
+  passages, `[…]` between blocks that are not contiguous. The block of the best passage alone
+  measured 14/20, below the passages' 16/20; the union is here to be measured forced, and it
+  enters only if it does not lose to the passages.
+* **The reader path, always.** Every whole read is `read_served` with the access's profile, on
+  every call: another profile's document, a draft, another owner's or a made-up id reads
+  nothing — `status="error"`, outcome `unreadable`, the SAME answer for all of them, so a forged
+  `document` learns nothing. The administrator's `version_text` is never used here.
+* **A negative never expands.** *Nothing relevant* (by the floor or by the evidence gate) returns
+  before any of this; not one whole read happens.
+* **Off, or nothing expanded → today's bytes.** With `max_whole_chars = 0`, or when no document
+  was expanded, the payload is the passages exactly as before (pinned by digest).
+* **A whole read that fails** keeps the passages the search found and marks the record
+  `whole_read_unavailable` — the search worked, so it is not an error.
+
 ## What the executor reads
 
 ```
@@ -159,7 +201,11 @@ reaches a host that runs the skill through it. So each call appends a `ConsultRe
 `model` — never the texts), which floor, the outcome, the degradations, how many fused passages
 the floor cut (`below_floor`), which gate cut a *nothing relevant* (`cut_by`) and the lexical
 evidence it read, the ids/scores/lexical scores/variants of the passages that passed, and how
-many of those fitted the answer (`shown`) — never text (`ConsultRecord`, pinned in
+many of those fitted the answer (`shown`; with a whole reading, how many of them the answer
+COVERS), how the documents were shown (`mode`: `passages` | `section` | `document`), which were
+read whole (`whole_ids`), whether the budget cut one (`has_more`), whether this call was a
+continuation (`continued`; outcomes `continued` / `unreadable`) and whether the executor asked
+for the whole (`whole_requested`) — never text (`ConsultRecord`, pinned in
 `tests/unit/test_consult_documents.py`). Who pays, against which allowance, is the host's.
 
 ## What stays with the host

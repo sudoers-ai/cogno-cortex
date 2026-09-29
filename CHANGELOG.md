@@ -37,7 +37,11 @@
   - **the worst case is bounded**: 20 docs × 12 → the block ≤ 1200; control: the same sections
     one per line are more than 4× it;
   - the P9.0 tests rewritten to the grouped line (the twin, the defanging, the per-document
-    ceiling, the title ceiling); the byte-identity digests unchanged.
+    ceiling, the title ceiling); the byte-identity digests unchanged;
+  - **the price, asserted by the function**: 1 × 12, 2 × 12 and 6 × 6 leave 0 sections out (every
+    one listed), and 4 × 12 leaves exactly 14 of 48 out and says so in `(and 14 more sections)`
+    (on `main` the same shapes give 0/0/0/6). Mutation: the budget on the headings' text again
+    → the 4 × 12 test red.
 - **Mutations, by hand, through the gate** (anchor `grep -cxF` = 1, `ast.parse`, red, reverted):
   - the title repeated per section again (one line per section) →
     `test_TWIN_each_title_is_written_ONCE_its_sections_beside_it`, with the twin, the defanging,

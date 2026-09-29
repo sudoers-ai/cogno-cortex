@@ -215,3 +215,45 @@ async def test_offer_consult_documents_never_puts_the_stores_headings_in_the_des
     manifest = await offer_consult_documents(acc)
     assert manifest is not None and "Office of Somebody Invented" not in manifest.description
     assert "Sections" not in manifest.description
+
+
+# ── the PRICE of the rendered ceiling, asserted by the function (not by a reading) ─────────────
+#
+# The four shapes of the measurement in the PR (invented): what the grouped block leaves OUT is
+# the number the ``(and N more sections)`` tail says, and every section not left out is listed.
+
+def _shape(docs: int, per_doc: int, section: str, title: str):
+    return ([_Doc(title.format(i=i), f"d{i}") for i in range(docs)],
+            {f"d{i}": [section.format(j=j) for j in range(per_doc)] for i in range(docs)})
+
+
+_SHAPES = {
+    "1x12": _shape(1, 12, "Secção {j:02d} de receitas e despesas", "Relatório Financeiro 2030"),
+    "2x12": _shape(2, 12, "Secção {j:02d} de receitas e despesas", "Relatório {i}"),
+    "6x6": _shape(6, 6, "Tema {j} do manual", "Manual {i}"),
+    "4x12": _shape(4, 12, "Capítulo {j:02d} — tema inventado", "Relatório de gestão do ano {i}"),
+}
+
+
+def _left_out(text: str) -> int:
+    m = re.search(r"\(and (\d+) more sections?\)$", text)
+    return int(m.group(1)) if m else 0
+
+
+@pytest.mark.parametrize("shape", ["1x12", "2x12", "6x6"])
+def test_the_shapes_that_fit_lose_NO_section_under_the_rendered_ceiling(shape):
+    docs, sections = _SHAPES[shape]
+    text = describe_documents(docs, sections=sections)
+    total = sum(len(v) for v in sections.values())
+    listed = sum(len(secs) for _, secs in grouped(text))
+    assert (_left_out(text), listed) == (0, total), shape
+    assert len(block(text)) <= MAX_SECTIONS_CHARS
+
+
+def test_the_4x12_shape_leaves_14_of_48_out_and_COUNTS_them():
+    docs, sections = _SHAPES["4x12"]
+    text = describe_documents(docs, sections=sections)
+    listed = sum(len(secs) for _, secs in grouped(text))
+    assert (_left_out(text), listed) == (14, 34)            # 14 + 34 = 48, nothing silent
+    assert text.endswith("(and 14 more sections)")
+    assert len(block(text)) <= MAX_SECTIONS_CHARS

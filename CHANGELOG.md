@@ -38,7 +38,7 @@
   `whole_ids`, `continued`, `has_more`, `whole_requested`; outcomes `continued` and
   `unreadable` join `VALID_OUTCOMES`; `shown` counts the passed passages the answer COVERS.
   `hit_ids`, `cut_by` and the scores are as before.
-- **Tests** — `tests/unit/test_consult_documents_whole_read.py` (34, invented data):
+- **Tests** — `tests/unit/test_consult_documents_whole_read.py` (37, invented data):
   - the twin: a small document of the shown passages read whole, every item once (48 + 16);
     control: reading off, the best-3 miss the grid, and chunk by chunk the overlap IS there;
   - byte identity, 3 settings × 5 digests computed before the change;
@@ -52,7 +52,12 @@
   - section mode forced: both blocks, nothing between; control: off by default;
   - the budget: one whole, one in passages;
   - the schema only when reading; the access refusals; a failing read keeps the passages;
-  - the arguments coerced, never a crash; without a budget they are ignored.
+  - the arguments coerced, never a crash; without a budget they are ignored;
+  - **injection through the WHOLE read** (the #13 review): a document whose text and headings
+    carry a `<TOOL_CALL>` and forged `<excerpt …>`/`</excerpt>` fences (upper case and spaced
+    too), read in document mode, with `whole: true` and by continuation — no call that parses,
+    the fences neutralised, exactly ONE opening and ONE closing fence; control: the served text
+    IS hostile. The injection tests before covered the passages only.
 
   Plus one Postgres test (`tests/integration/test_consult_documents_postgres.py`, CI job
   `integration-postgres`): the whole read and the forged id over the real reader path.
@@ -65,6 +70,9 @@
     `test_section_mode_forced_reads_the_union_of_the_blocks_that_hold_the_passages`;
   - the overlap not removed (`_document_body(g, …)`) →
     `test_TWIN_a_small_document_of_the_shown_passages_is_read_whole_every_item_said_once`.
+  - the whole path's text not sanitised (`text = _defang(…)` → the raw text) →
+    `test_TWIN_a_hostile_document_read_WHOLE_can_neither_plant_a_call_nor_break_the_fence`
+    (its three cases, nothing else);
   - The draft rule is the store's (`read_served`), and its mutation is in cogno-engram #76.
 
 ### Changed (docs)

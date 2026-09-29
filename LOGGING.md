@@ -17,7 +17,12 @@ This library follows the Cogno house rule: **libraries emit, the host configures
   `event=consult_documents_embed_unavailable error=<ExceptionType|width>` when the
   question could not be embedded (the search degrades to words);
   `event=consult_documents_search_failed error=<ExceptionType>` when the document
-  store raised (the tool answers with an error).
+  store raised (the tool answers with an error);
+  `event=consult_documents_whole_read_failed error=<ExceptionType>` when reading a document
+  WHOLE raised (the answer keeps the passages the search found; the record carries
+  `whole_read_unavailable`);
+  `event=consult_documents_read_failed error=<ExceptionType>` when a continuation
+  (`document` + `after`) raised (the tool answers with an error). Never an id, a title or text.
 - **INFO** — none.
 - **DEBUG** — `event=skill_invoked name=… provider=… status=…` per bus dispatch.
 

@@ -74,12 +74,28 @@ listed, while a request that belonged to the other tool went there 3/3 in both a
   counted).
 * **`sections`** maps a document's **id** to its headings (by id: two documents may share a
   title; anything but a mapping is no sections). Each heading goes through the SAME label rule
-  as a title and is written under the titles as one `"Title › Section"` JSON literal per line.
-  The ceilings are a scope guard's, in its UNIT: `MAX_SECTION_CHARS` (60) per section,
-  `MAX_SECTIONS_PER_DOCUMENT` (12), and `MAX_SECTIONS_CHARS` (1200) characters of section TEXT in
-  all — the first section that does not fit ends its document's list. The rest are **counted**
-  (`(and N more sections)`), those of a document past the title ceiling included. A host that
-  hands over the sections its guard rendered can never have them cut differently here.
+  as a title, and they are written under the titles **one line per document** — the title ONCE,
+  its sections beside it: `"Title": "Section"; "Other section"`. Ceilings:
+  `MAX_SECTION_CHARS` (60) per section, `MAX_SECTIONS_PER_DOCUMENT` (12), and
+  `MAX_SECTIONS_CHARS` (1200) characters of the section BLOCK **as rendered** (titles, quotes,
+  separators, line breaks) — what the executor is actually sent; the first section that does not
+  fit ends its document's line. The rest are **counted** (`(and N more sections)`), those of a
+  document past the title ceiling included. Every number is at most a scope guard's, so a host
+  that hands over the sections its guard rendered can only see FEWER here, never one the guard
+  did not.
+* **Why one line per document (P9.0-b).** The first form wrote one line per SECTION, each
+  repeating its title, and bounded the section TEXT only. Measured (o200k, invented shapes, the
+  description with sections minus without):
+
+  | shape | one line per section | one line per document |
+  |---|---|---|
+  | 20 documents × 12 short sections, ~120-char titles (the theoretical worst) | +5 029 tokens | +409 |
+  | 4 documents × 12 sections of ~29 chars | +859 | +392 |
+  | 1 document × 12 sections | +229 | +142 |
+
+  The price, measured on the same shapes: when the rendered block is full, fewer sections fit —
+  the 4 × 12 shape leaves 14 of 48 out instead of 6; the 1 × 12, 2 × 12 and 6 × 6 shapes lose
+  none.
 * **With no section to write** (`None`, `{}`, none for the listed documents) the description is
   the titles-only one **byte for byte** — pinned by digest against the bytes before this change.
 * **Personal data is the caller's filter.** A heading comes from the file's CONTENT, not from

@@ -1,5 +1,55 @@
 # Changelog
 
+## Unreleased — P9.0-b: the sections grouped BY DOCUMENT — each title once, the ceiling on what is rendered
+
+### Changed
+
+- **`describe_documents(..., sections=…)` writes ONE line per document**: `"Title": "Section";
+  "Other section"` — the title once, its sections beside it. The first form (P9.0, #12) wrote one
+  line per SECTION, each repeating its title.
+- **`MAX_SECTIONS_CHARS` (1200) now counts the section block AS RENDERED** — titles, quotes,
+  separators and line breaks, i.e. what the executor is sent — instead of the headings' text. A
+  section is written while its document's line, with it, still fits what is left; the first that
+  does not fit ends that line (the guard's rule, in the rendered unit). `MAX_SECTION_CHARS` (60)
+  and `MAX_SECTIONS_PER_DOCUMENT` (12) are unchanged. The rest are counted, as before.
+- Every number is at most the reference guard's, so a host handing over the sections its guard
+  rendered can only see FEWER here — never one the guard did not (executor ⊆ guard still holds;
+  equality no longer does when the block is full).
+- **With no section to write, today's bytes**: the digests pinned in #12 hold unchanged.
+- **Measured** (o200k, invented shapes; the description with sections minus without; script in
+  the PR):
+
+  | shape | per section (#12) | per document | × |
+  |---|---|---|---|
+  | 20 docs × 12 short sections, ~120-char titles — the theoretical worst | +5 029 tokens | +409 | 12.3 |
+  | same, with 120-char titles of one repeated letter | +16 093 | +634 | 25.4 |
+  | 4 docs × 12 sections of ~29 chars | +859 | +392 | 2.2 |
+  | 1 doc × 12 sections | +229 | +142 | 1.6 |
+
+  **The price, measured on the same shapes:** where the rendered block fills, fewer sections fit
+  — 4 docs × 12 leaves 14 of 48 out instead of 6. 1 × 12, 2 × 12 and 6 × 6 lose none.
+- Tests (`tests/unit/test_consult_documents_sections.py`):
+  - **each title ONCE**: 3 docs × 5 sections → 3 lines, each title once in the block; control:
+    all 15 sections there;
+  - **the ceiling counts the RENDERED block**: 3 docs × 12 sections of 60 chars → the block
+    ≤ 1200 and the next section would cross it; control: the text of what was listed is below
+    the block's length;
+  - **the worst case is bounded**: 20 docs × 12 → the block ≤ 1200; control: the same sections
+    one per line are more than 4× it;
+  - the P9.0 tests rewritten to the grouped line (the twin, the defanging, the per-document
+    ceiling, the title ceiling); the byte-identity digests unchanged;
+  - **the price, asserted by the function**: 1 × 12, 2 × 12 and 6 × 6 leave 0 sections out (every
+    one listed), and 4 × 12 leaves exactly 14 of 48 out and says so in `(and 14 more sections)`
+    (on `main` the same shapes give 0/0/0/6). Mutation: the budget on the headings' text again
+    → the 4 × 12 test red.
+- **Mutations, by hand, through the gate** (anchor `grep -cxF` = 1, `ast.parse`, red, reverted):
+  - the title repeated per section again (one line per section) →
+    `test_TWIN_each_title_is_written_ONCE_its_sections_beside_it`, with the twin, the defanging,
+    the ceilings and the worst case (6 failed / 38 passed);
+  - the budget counting the heading TEXT again (`add = len(label)`) →
+    `test_TWIN_the_total_ceiling_counts_the_RENDERED_block` and the worst case (2 failed / 42
+    passed).
+
 ## Unreleased
 
 ### Added — P9: `consult_documents` reads a document WHOLE (needs cogno-engram with `read_served`, #76)

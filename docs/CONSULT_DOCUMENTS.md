@@ -61,17 +61,20 @@ from cogno_cortex.skills.consult_documents import (
 to decide whether to call the tool at all. A title alone often does not say what a document
 covers, and a tool the executor cannot see to be about the question is a tool it does not
 choose — measured on a reference host: a request about a subject that lived only in a SECTION
-went to another tool 3/3 with titles alone and to this one 3/3 with the sections listed, while a
-request that belonged to the other tool stayed there 3/3 both ways.
+was sent to this tool 0/3 with titles alone (the other tool got it 3/3) and 3/3 with the sections
+listed, while a request that belonged to the other tool went there 3/3 in both arms.
 
 * **Titles**, as always: one line each, `sanitize_untrusted` + excerpt-fence tags defanged, cut
   to `MAX_TITLE_CHARS`, JSON string literals, at most `MAX_TITLES_IN_DESCRIPTION` (the rest
   counted).
 * **`sections`** maps a document's **id** to its headings (by id: two documents may share a
-  title). Each heading goes through the SAME label rule as a title and is written under the
-  titles as one `"Title › Section"` JSON literal per line, at most `MAX_SECTIONS_PER_DOCUMENT`
-  (20) per document and `MAX_SECTIONS_IN_DESCRIPTION` (40) in all; the rest are **counted**
-  (`(and N more sections)`), those of a document past the title ceiling included.
+  title; anything but a mapping is no sections). Each heading goes through the SAME label rule
+  as a title and is written under the titles as one `"Title › Section"` JSON literal per line.
+  The ceilings are a scope guard's, in its UNIT: `MAX_SECTION_CHARS` (60) per section,
+  `MAX_SECTIONS_PER_DOCUMENT` (12), and `MAX_SECTIONS_CHARS` (1200) characters of section TEXT in
+  all — the first section that does not fit ends its document's list. The rest are **counted**
+  (`(and N more sections)`), those of a document past the title ceiling included. A host that
+  hands over the sections its guard rendered can never have them cut differently here.
 * **With no section to write** (`None`, `{}`, none for the listed documents) the description is
   the titles-only one **byte for byte** — pinned by digest against the bytes before this change.
 * **Personal data is the caller's filter.** A heading comes from the file's CONTENT, not from

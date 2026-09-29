@@ -1,5 +1,93 @@
 # Changelog
 
+## Unreleased — C4: evidence by the section HEADING, the hybrid floor's one exception
+
+### Added
+
+- **A passage below the HYBRID floor passes when its section heading names the question.**
+  Measured on a reference host: a section that IS a table (years and figures, little prose)
+  came back FIRST with a fused score of 0.361 under a hybrid floor of 0.40 (vector 0.490,
+  lexical 0.167), and the same 0.361 with the section's exact heading as the query; the record
+  said `cut_by=floor`, `below_floor=3`, and the contact was told the documents did not say.
+  - **names** = EVERY content word of the heading (the leaf of `heading_path`; the document title
+    is never the section) is in ONE of the texts searched — the model's `query` or the contact's
+    words, not spread over the two — and the heading has at least `MIN_HEADING_WORDS` (2) of
+    them;
+  - **the words** are `cogno_engram.lexical.terms` — the engram's one tokenizer and stopword list
+    over `cogno_engram.textfold.fold`, the fold the in-memory index uses and the one this module
+    already compared its two variants with. A digits-only token (the outline's `12.`, a table's
+    years) is not a content word. The Postgres index's `portuguese` + `unaccent` fold lives in SQL
+    and has no client-side twin, so the heading test is the engram's word rule, on both sides;
+  - **why a floor of 2 words, not a list of generic headings**: one shared word is what the rule
+    refuses everywhere else, so a one-word heading would be that same word under another name,
+    and a list of generic words is per language and fails OPEN on the one it forgot. Measured,
+    not argued: with the floor at 1 word an EXISTING test of the evidence gate goes red
+    (`test_a_word_only_BELOW_the_floor_is_not_evidence`, where a passage headed «Parking» below
+    the floor must not be evidence for «weekend parking») — a closed list would not list
+    «Parking» and would break it the same way. The price: a SPECIFIC one-word heading does not
+    get the exception either, and is judged by the floor as before.
+- **`ConsultRecord.heading_match`** (int, `0` by default): how many passages passed by heading.
+  `below_floor` still counts every passage that scored under the floor, so the floor cut
+  `below_floor - heading_match`. The evidence line gains `heading_match=N` only when `N > 0`.
+- **`MIN_HEADING_WORDS`** exported.
+
+### Unchanged
+
+- the floor for every other passage; a rescued passage only fills a slot the floor left empty
+  (so it is always SHOWN) and sits after everything that cleared the floor — the score's order;
+- it still faces the evidence gate (a heading's passage with too little lexical evidence is cut
+  by `lexical_evidence`, with `heading_match` saying it got that far);
+- a LEXICAL result: its floor already is a words test, and the exception was measured on the
+  hybrid scale only;
+- with nothing rescued, the record (every old field), the payload and the evidence are the old
+  ones **byte for byte** — four worlds pinned by digest against `main` (d42aa6c), and `cut_by`
+  is `floor` exactly when it was.
+
+### Its price
+
+A question that repeats a section's heading word for word lifts that section from under the
+floor even when the section does not hold the answer; it is shown with its provenance.
+
+### Tests (`tests/unit/test_consult_documents_heading_evidence.py`, invented data only)
+
+- **the twin** — the FORM of the measured case: a table section («12. Variação das Diárias», an
+  invented inn, invented years and figures), the right passage FIRST at 0.35 under a 0.40 floor,
+  → passes with `heading_match=1`; either text alone names it; case, accents, spacing and the
+  plural fold (3 spellings). **In the broken world** (`main`, the same file) the twin and those
+  four fail on their FIRST assertion: `outcome == 'nothing_relevant'`, `cut_by='floor'`.
+- **controls:** ONE word of a heading of several does not pass (2 questions); a one-word
+  heading does not pass («Geral», «Outros», and the price, «Estacionamento»), each with its
+  presence produced at a floor of 1 word; four worlds the exception does not touch reproduce
+  `main` by digest (three clear the floor with a named heading below and no free slot; the
+  heading's passage clears on its own; no heading named; nothing relevant by the floor), with a
+  test that reads each world for the shape it claims; the rescued passage is APPENDED after what
+  cleared the floor, against the same world with the exception off; a lexical result, the
+  document title, the words spread over the two texts, the evidence gate, the slot cap.
+- **SHAPES of the P9 ruler's controls — invented, not its data:** four negative shapes (one
+  heading word shared; the document title's words; a heading split over the two texts; a
+  generic word alone) stay *nothing relevant* by the floor; three positive shapes keep every
+  passage that cleared the floor, in order, with the same scores.
+- **Mutations, through the gate** (anchor count 1, `ast.parse`, red, `reset --hard`):
+  - **ALL → ANY** heading word (the mandatory one) → both one-word controls, the two-texts test
+    and 2 negative shapes (5 failed / 233 passed);
+  - digits count as content words → the twin and every test that needs the heading to match (12
+    failed);
+  - a floor of 1 word → the three one-word controls, the constant, and the existing
+    `test_a_word_only_BELOW_the_floor_is_not_evidence` (5 failed);
+  - the exception on the lexical scale too → the lexical test (1 failed);
+  - the union of the two texts → the two-texts test and its negative shape (2 failed);
+  - no slot cap → the slot test (1 failed);
+  - the document title counted as a section → the title test (1 failed).
+- **The Postgres leg** (`tests/integration/test_consult_documents_postgres.py`, the CI job
+  `integration-postgres`): the twin on the REAL scale (`ts_rank_cd` + `portuguese` + `unaccent`,
+  pgvector), with the host's numbers — fused 0.242 under a 0.40 floor, lexical 0.231 over a 0.13
+  evidence floor → passes with `heading_match=1`; on `main` the same test reads
+  `nothing_relevant`, `cut_by=floor`. Its control on the same store (one heading word shared)
+  stays `nothing_relevant` by the floor.
+- **The P9 ruler** (24 labelled questions over a reference host's documents) was NOT run for
+  this entry: it reads a live store and embeds with a local model. It is run before landing by
+  whoever owns that instrument.
+
 ## Unreleased — P9.0-b: the sections grouped BY DOCUMENT — each title once, the ceiling on what is rendered
 
 ### Changed

@@ -58,6 +58,26 @@ lexical threshold. **Its price, said plainly:** a passage that answers the quest
 paraphrase — no word in common with either text searched — is now *nothing relevant*. Like the
 two floors it is REQUIRED with no default (a measured number, per scale); ``0`` switches it off.
 
+**Evidence by the HEADING: the floor's one exception, in hybrid mode.** A section that IS a
+table — years and figures, little prose — scores low on both halves even when it is the answer:
+measured on a reference host, the right passage came back FIRST with a fused score under the
+hybrid floor (and the same score with the section's exact title as the query), so the reading
+said *nothing relevant* over the one passage that answered. What that passage does carry is its
+section HEADING. So a passage below the hybrid floor PASSES when the leaf of its
+``heading_path`` names the question: EVERY content word of that heading is in ONE of the texts
+searched (the model's ``query`` or the contact's words), and the heading has at least
+:data:`MIN_HEADING_WORDS` of them. The words are :func:`cogno_engram.lexical.terms` (the engram's
+one tokenizer and stopword list, over the general text fold, :func:`cogno_engram.textfold.fold`);
+digits-only tokens — an outline's numbering, a table's years — are not content words; the
+document title is never the section. What it does NOT change: the floor holds for every other
+passage; a rescued passage only fills a slot the floor left empty, so it is always shown and the
+order stays the score's; it still faces the evidence gate; a lexical result is untouched (its
+floor already IS a words test, and the exception was measured on the hybrid scale only). The
+record counts it (``ConsultRecord.heading_match``), and ``cut_by`` is what it always was when
+nothing passes that way. **Its price:** a question that repeats a section's heading word for word
+lifts that section from under the floor even when the section does not hold the answer — the
+passage is shown with its provenance, and the executor reads it.
+
 **An embedder failure never kills the turn; a store failure is never "nothing written".** The
 embedder only helps FIND passages, so losing it degrades the search to words
 (``cogno_anima.vocab.EMBED_UNAVAILABLE`` on the record) and the contact still gets an answer.
@@ -147,6 +167,7 @@ try:
         require_owner,
         require_profile,
     )
+    from cogno_engram.lexical import terms as lexical_terms
     from cogno_engram.textfold import fold
 except ImportError as exc:  # pragma: no cover — exercised only in an install without the extra
     raise ImportError(
@@ -189,9 +210,17 @@ VALID_MODES: frozenset[str] = frozenset({MODE_PASSAGES, MODE_SECTION, MODE_DOCUM
 DEGRADED_WHOLE_READ = "whole_read_unavailable"
 
 #: Which gate said «nothing relevant» — the closed alphabet of :attr:`ConsultRecord.cut_by`.
-CUT_FLOOR = "floor"                          # no passage cleared the floor
+CUT_FLOOR = "floor"                          # no passage cleared the floor, nor passed by heading
 CUT_LEXICAL_EVIDENCE = "lexical_evidence"    # some did, and none of them shares the question's words
 VALID_CUTS: frozenset[str] = frozenset({CUT_FLOOR, CUT_LEXICAL_EVIDENCE})
+
+#: A SECTION heading is evidence for the floor's one exception (module docstring, *Evidence by
+#: the HEADING*) only when it carries at least this many content words. A floor, not a list of
+#: generic headings: one word shared with a question is the evidence the exception refuses
+#: everywhere else (a multi-word heading matched by ONE of its words does not pass), so a one-word
+#: heading («General», «Other», «Prices») would be that same single word under another name — and
+#: a list of generic words is a list per language that fails OPEN on the one it forgot.
+MIN_HEADING_WORDS = 2
 
 #: Budget defaults — a SAFE mechanism default, not a product decision. The store cuts chunks of
 #: ~2000 characters (``cogno_engram.chunking``), so one excerpt fits whole; three of them plus
@@ -256,12 +285,16 @@ class ConsultRecord:
     model's query. ``hit_variants`` runs parallel to ``hit_ids``/``scores`` (the passages that
     PASSED — the floor and, in hybrid mode, the evidence gate — best first, at most
     ``DocumentsAccess.limit``) and says which variant gave each one. ``below_floor`` counts the
-    fused passages the floor cut. ``shown`` is how many of the passed ones fitted the answer
+    fused passages whose score is below the floor, and ``heading_match`` how many of THOSE passed
+    anyway because their section heading names the question (module docstring, *Evidence by the
+    HEADING*) — so the floor cut ``below_floor - heading_match``, and ``heading_match`` is ``0``
+    whenever the exception did not fire. ``shown`` is how many of the passed ones fitted the answer
     budget. ``degradations`` are the store's marks plus
     :data:`cogno_anima.vocab.EMBED_UNAVAILABLE` when the embedder could not be used.
     ``lexical_scores`` runs parallel to ``scores`` (each passed passage's ``lexical_score``).
     ``lexical_evidence`` is the highest ``lexical_score`` among the passages that CLEARED the
-    floor — ``None`` on a lexical result or when none cleared it. ``cut_by`` says which gate
+    floor (those that passed by heading included) — ``None`` on a lexical result or when none
+    cleared it. ``cut_by`` says which gate
     produced a *nothing relevant* (:data:`VALID_CUTS`); ``None`` when the reading had hits or the
     search failed.
 
@@ -298,6 +331,7 @@ class ConsultRecord:
     continued: bool = False
     has_more: bool = False
     whole_requested: bool = False
+    heading_match: int = 0
 
 
 def _unit(name: str, value: object) -> float:
@@ -655,6 +689,34 @@ def _fuse(results: "Sequence[tuple[str, Any]]", *, lexical: bool) -> "list[_Fuse
                 best[hit.id] = _Fused(hit=hit, score=score, variant=variant)
     return sorted(best.values(), key=lambda f: (-f.score, str(f.hit.document_id),
                                                 int(f.hit.version), int(f.hit.ordinal)))
+
+
+def _heading_words(hit: Any) -> "frozenset[str]":
+    """The content words of the SECTION a passage sits under — the leaf of its ``heading_path`` —
+    or nothing when it sits under the document title alone.
+
+    The words are :func:`cogno_engram.lexical.terms`: the engram's ONE tokenizer and stopword
+    list, over :func:`cogno_engram.textfold.fold` — the fold the in-memory index folds with and
+    the one :func:`_same` compares the two variants with; the Postgres index's stemming lives in
+    SQL and has no client-side twin. A token made only of digits is not a content word here: it
+    is the outline's numbering («12. Room rates») or the years a table covers, which a
+    contact does not repeat when asking what the section is ABOUT. The document title (the head
+    of the path, the rule :func:`_provenance` applies) is never the section."""
+    trail = [str(p) for p in (getattr(hit, "heading_path", ()) or ())]
+    title = str(getattr(hit, "title", "") or "")
+    if trail and title and trail[0].casefold() == title.casefold():
+        trail = trail[1:]
+    if not trail:
+        return frozenset()
+    return frozenset(w for w in lexical_terms(trail[-1]) if not w.isdigit())
+
+
+def _heading_matches(hit: Any, asked: "Sequence[frozenset[str]]") -> bool:
+    """Does the section's heading say what the question asks? EVERY content word of the heading
+    in ONE of the texts searched (the model's ``query`` or the contact's words), and at least
+    :data:`MIN_HEADING_WORDS` of them."""
+    words = _heading_words(hit)
+    return len(words) >= MIN_HEADING_WORDS and any(words <= question for question in asked)
 
 
 def _clip(text: str, limit: int) -> str:
@@ -1161,9 +1223,21 @@ class ConsultDocumentsTool(BaseTool):
         fused = _fuse(results, lexical=lexical)
         cleared = [f for f in fused if f.score >= floor]
         below = len(fused) - len(cleared)
+        # The floor's ONE exception (module docstring, *Evidence by the HEADING*): in hybrid mode,
+        # a passage below the floor whose SECTION heading the question names passes — only into a
+        # slot the floor left empty, so every passage it lets in is one the answer shows, and the
+        # order stays the score's (all of them sit below everything that cleared the floor).
+        rescued: list[_Fused] = []
+        if not lexical and len(cleared) < access.limit:
+            asked = [lexical_terms(text) for _, text in variants]
+            rescued = [f for f in fused if f.score < floor
+                       and _heading_matches(f.hit, asked)][:access.limit - len(cleared)]
+            if rescued:
+                cleared = cleared + rescued
         # The second gate (module docstring): in hybrid mode, over the WHOLE set that cleared the
-        # floor — never its first passage — at least one must share the question's words. It only
-        # decides; what is shown, and in which order, is what the floor alone would show.
+        # floor (a heading's passage included) — never its first passage — at least one must share
+        # the question's words. It only decides; what is shown, and in which order, is what the
+        # floor (and its heading exception) alone would show.
         support: Optional[float] = None
         cut: Optional[str] = None
         if not cleared:
@@ -1180,10 +1254,11 @@ class ConsultDocumentsTool(BaseTool):
                              floor=floor, outcome=OUTCOME_NOTHING_RELEVANT,
                              degradations=tuple(marks) + local, below_floor=below,
                              lexical_evidence=None if support is None else round(support, 6),
-                             cut_by=cut)
+                             cut_by=cut, heading_match=len(rescued))
         evidence = [f"variants={'+'.join(base.variants)}",
                     f"floor={'lexical' if lexical else 'hybrid'}:{floor:g}",
                     f"hits={len(passed)}", f"below_floor={below}"] + \
+                   ([f"heading_match={len(rescued)}"] if rescued else []) + \
                    ([f"lexical_evidence={support:g}"] if support is not None else []) + \
                    ([f"cut_by={cut}"] if cut else []) + \
                    [f"degraded={m}" for m in base.degradations]
@@ -1315,6 +1390,7 @@ __all__ = [
     "CUT_FLOOR",
     "CUT_LEXICAL_EVIDENCE",
     "VALID_CUTS",
+    "MIN_HEADING_WORDS",
     "DEFAULT_LIMIT",
     "DEFAULT_MAX_EXCERPT_CHARS",
     "DEFAULT_MAX_ANSWER_CHARS",

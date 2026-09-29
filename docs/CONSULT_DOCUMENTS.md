@@ -22,6 +22,7 @@ from cogno_cortex.skills.consult_documents import (
     DocumentsAccess,          # what the host injects (frozen, validated at construction)
     ConsultRecord,            # what one call spent and found (content-free)
     MODE_PASSAGES, MODE_SECTION, MODE_DOCUMENT, VALID_MODES,   # how the documents were shown
+    MIN_HEADING_WORDS,        # 2 — content words a section heading needs to be evidence
     OUTCOME_CONTINUED, OUTCOME_UNREADABLE,                      # a continuation's outcomes
     offer_consult_documents,  # async: manifest for this reader, or None
     describe_documents,       # pure: the tool description from the readable titles (+ sections)
@@ -127,13 +128,66 @@ its own knowledge that it had no vector). **There is no default**: the values co
 labelled evaluation over the distribution these scores actually have, and a default written here
 first would become the value every caller ships.
 
+## The floor's one exception: evidence by the HEADING (hybrid mode)
+
+A section that IS a table — years and figures, little prose — scores low on both halves of a
+hybrid score even when it is the answer. Measured on a reference host: the passage that answered
+came back FIRST, with a fused score of 0.361 under a hybrid floor of 0.40 (vector 0.490, lexical
+0.167 — enough for the evidence gate below, whose floor there is 0.13), and the same 0.361 with
+the section's exact heading as the query. The record said `cut_by=floor`, `below_floor=3`, and
+the contact was told the documents did not say — about the one passage that did.
+
+What such a passage carries is its section HEADING. So, **in hybrid mode**, a passage below the
+floor **passes** when its section heading names the question:
+
+* **the heading** is the leaf of the passage's `heading_path` — a SECTION's; a passage under the
+  document title alone has none (the title is the head of the path, the rule the provenance
+  header applies);
+* **the words** are `cogno_engram.lexical.terms` — the engram's one tokenizer and stopword list,
+  over the general text fold (`cogno_engram.textfold.fold`: case, accents, compatibility forms),
+  the fold the in-memory index uses and the one this skill already compares its two variants
+  with; a digits-only token (an outline's `12.`, a table's years) is not a content word. The
+  Postgres index folds in SQL (`portuguese` + `unaccent`, which also stems): that has no
+  client-side twin, so the heading test does not claim to be the index's measure — it is the
+  engram's word rule, on both sides;
+* **names** means EVERY content word of the heading is in ONE of the texts searched (the model's
+  `query` or the contact's words — not spread over the two), and the heading has at least
+  `MIN_HEADING_WORDS` (2) of them.
+
+**Why a floor of two words, not a list of generic headings.** One word shared with a question is
+exactly the evidence the rule refuses everywhere else — a heading of several words matched by
+ONE of them does not pass — so a one-word heading (*General*, *Other*) would be that same single
+word under another name. A list of generic headings is a list per language, and it fails OPEN on
+the word it forgot. The price is said, not hidden: a SPECIFIC one-word heading (*Parking*) does
+not get the exception either, and is judged by the floor as before.
+
+What it does **not** change:
+
+* the floor holds for every other passage;
+* a rescued passage only fills a slot the floor left empty (the reading shows at most `limit`),
+  so every passage it lets in is SHOWN, and the order stays the score's — all of them sit below
+  everything that cleared the floor;
+* it still faces the evidence gate;
+* a **lexical** result is untouched: its floor already is a words test, and the exception was
+  measured on the hybrid scale only;
+* with nothing rescued the record, the payload and the evidence are the old ones byte for byte
+  (pinned by digest against the tree before the change), and `cut_by` is what it always was.
+
+The record counts it: `heading_match` is how many passages passed by heading, and `below_floor`
+keeps counting every passage that scored under the floor — so the floor cut
+`below_floor - heading_match`. The evidence line gains `heading_match=N` only when `N > 0`.
+**Its price:** a question that repeats a section's heading word for word lifts that section from
+under the floor even when the section does not hold the answer; it is shown with its provenance,
+and the executor reads it.
+
 ## The evidence gate (hybrid mode)
 
 The vector half of a hybrid score measures TOPIC, and topic alone can lift a passage over the
 floor: a question about something the documents never mention lands near the passage about the
 nearest thing they do mention. A floor on the fused score cannot tell the two apart, and one
 measured to lose nothing on one corpus can cut real answers on another. So, **in hybrid mode**,
-among the passages that CLEAR the floor, at least one must also share the question's words — its
+among the passages that CLEAR the floor (a passage let in by its heading included), at least one
+must also share the question's words — its
 `lexical_score` must reach `lexical_evidence_floor` — or the reading is *nothing relevant*.
 
 * The gate reads the **set** that cleared the floor, never only its first passage.
@@ -216,7 +270,8 @@ reaches a host that runs the skill through it. So each call appends a `ConsultRe
 `usage_reported` (`False` = unknown, not zero), the variants searched (their LABELS, `user` /
 `model` — never the texts), which floor, the outcome, the degradations, how many fused passages
 the floor cut (`below_floor`), which gate cut a *nothing relevant* (`cut_by`) and the lexical
-evidence it read, the ids/scores/lexical scores/variants of the passages that passed, and how
+evidence it read, how many passed the floor by their heading (`heading_match`; `below_floor`
+still counts them), the ids/scores/lexical scores/variants of the passages that passed, and how
 many of those fitted the answer (`shown`; with a whole reading, how many of them the answer
 COVERS), how the documents were shown (`mode`: `passages` | `section` | `document`), which were
 read whole (`whole_ids`), whether the budget cut one (`has_more`), whether this call was a

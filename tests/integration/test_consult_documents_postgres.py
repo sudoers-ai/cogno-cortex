@@ -235,3 +235,41 @@ async def test_WHOLE_on_postgres_the_served_document_whole_and_a_forged_id_reads
     ok = await ConsultDocumentsTool(query="x", document=staff_only).run(
         ToolContext(metadata={META_DOCUMENTS_ACCESS: admin}))
     assert "ZETA-ADMIN-MARCA" in ok.payload and admin.records[-1].outcome == OUTCOME_CONTINUED
+
+
+# ── the floor's one exception on the production scale: evidence by the section HEADING ────
+#
+# The FORM of the measured case, INVENTED data: a section that is a table (years and figures,
+# little prose) under a numbered heading of several words. Its vector is weak (``v = 0.25``) and
+# ``ts_rank_cd`` of a table is low, so its fused score is under the floor even though it is the
+# answer. The heading test itself is client-side (the engram's word rule); what this leg adds is
+# the REAL scale the fused score is on.
+
+QUARTER = [0.0, 0.0, 0.0, 15.0 ** 0.5, 0.0, 0.0, 0.0, 1.0]     # cos 0.25 against NEUTRAL
+RATES = ("| Ano | Diária média |\n|---|---|\n| 2019 | R$ 210 |\n| 2021 | R$ 185 |\n"
+         "| 2023 | R$ 240 |", ("12. Variação das Diárias",), 7, QUARTER)
+ACCESS = ("A pousada fica a 2 km do centro, com acesso por estrada asfaltada.",
+          ("3. Localização e Acesso",), 2, _axis(1))
+
+
+async def test_HEADING_on_postgres_a_table_section_under_the_floor_passes_by_its_heading(pg):
+    owner = f"acme{uuid4().hex[:6]}/front-desk"
+    doc = await _publish(pg, owner, title="Relatório anual da Pousada Vento Norte",
+                         profiles=("EMPLOYEE",), chunks=[ACCESS, RATES])
+    asked = "Como foi a variação das diárias?"
+    # the host's numbers: a hybrid floor of 0.40 and an evidence floor of 0.13
+    acc = _access(pg, owner, hybrid_floor=0.4, lexical_evidence_floor=0.13, user_text=asked)
+    res = await _run(acc, "variação das diárias ao longo dos anos")
+    rec = acc.records[0]
+    assert not rec.lexical and rec.outcome == OUTCOME_HITS, rec
+    assert rec.hit_ids == (f"kb:{doc}.1.1",) and rec.heading_match == 1
+    assert rec.scores[0] < 0.4, "under the floor on the real scale — it passed by its heading"
+    assert rec.lexical_evidence is not None and rec.lexical_evidence >= 0.13, "and the 2nd gate"
+    assert rec.below_floor >= 1 and "| 2021 | R$ 185 |" in res.payload
+    # the CONTROL on the same store: a question that shares ONE word of the heading is judged by
+    # the floor, as before
+    one = _access(pg, owner, hybrid_floor=0.4, lexical_evidence_floor=0.13,
+                  user_text="Como foi a variação do câmbio?")
+    await _run(one, "Como foi a variação do câmbio?")
+    assert one.records[0].outcome == OUTCOME_NOTHING_RELEVANT and one.records[0].cut_by == "floor"
+    assert one.records[0].heading_match == 0 and one.records[0].below_floor >= 1

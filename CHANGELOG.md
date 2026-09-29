@@ -15,6 +15,35 @@
 
 ### Added
 
+- **`describe_documents(..., sections=None)`: the SECTIONS under each title in the
+  `consult_documents` description (P9.0).** The executor chooses a tool by its description, and
+  the description listed TITLES only. Measured on a reference host (n=3 per arm): a request about
+  a subject that lived only in a SECTION of a document went to another tool **0/3** with titles
+  alone, and to `consult_documents` **3/3** with the sections listed; the control, a request that
+  belonged to the other tool, stayed there 3/3 both ways.
+  - `sections` maps a document's **id** to its headings (by id, not by title: two documents may
+    share a title, and a caller's cleaned title need not equal the raw one). Each heading goes
+    through the SAME `_label` as a title (whitespace collapsed, `sanitize_untrusted`,
+    excerpt-fence tags defanged, cut to `MAX_TITLE_CHARS`) and is written under the titles as one
+    `"Title › Section"` JSON literal per line.
+  - Ceilings `MAX_SECTIONS_PER_DOCUMENT` = 20 and `MAX_SECTIONS_IN_DESCRIPTION` = 40; the rest
+    are COUNTED (`(and N more sections)`), the sections of a document past the title ceiling
+    included.
+  - **No section to write → today's bytes**, pinned by SHA-256 against four inputs whose digests
+    were computed on `main` b3ca3bb before this change, under five "no section" shapes.
+  - **Personal data is the caller's filter**: a heading comes from the file's CONTENT and was
+    never checked, and this module cannot tell a name from a word. `offer_consult_documents`
+    therefore passes **no** sections; a host hands over only the headings it filtered.
+  - Tests: `tests/unit/test_consult_documents_sections.py` — the twin (sections under their
+    titles; control: without them, none), the byte-identity (and its control: one real section
+    moves the digest), a planted call / an excerpt fence / a quote / a line break in a section
+    defanged, a long one cut, the ceilings counted, and `offer_consult_documents` never putting
+    the store's headings in the description (control: the store does return them).
+  - **Mutation, by hand** (anchor `grep -cxF` = 1, `ast.parse`, red, reverted): the sections
+    taken out of the description (`lines, left_out = [], 0`) →
+    `test_twin_the_description_lists_each_section_under_its_title` red (with the control half of
+    all 20 byte-identity cases).
+
 - **`consult_documents`: a second gate in HYBRID mode, on lexical EVIDENCE.** Among the passages
   that clear the hybrid floor, at least one must share the question's words (its store-side
   `lexical_score` ≥ `DocumentsAccess.lexical_evidence_floor`), or the reading is *nothing

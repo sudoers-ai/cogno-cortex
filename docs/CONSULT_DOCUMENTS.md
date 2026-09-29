@@ -22,7 +22,7 @@ from cogno_cortex.skills.consult_documents import (
     DocumentsAccess,          # what the host injects (frozen, validated at construction)
     ConsultRecord,            # what one call spent and found (content-free)
     offer_consult_documents,  # async: manifest for this reader, or None
-    describe_documents,       # pure: the tool description from the readable titles
+    describe_documents,       # pure: the tool description from the readable titles (+ sections)
     consult_documents_manifest,
     ConsultDocumentsTool,     # the BaseTool; its only argument is `query`
     render_excerpts,          # pure: the payload renderer
@@ -54,6 +54,29 @@ from cogno_cortex.skills.consult_documents import (
   reads what the second may read. The model's arguments cannot reach either value: the tool
   declares only `query`, and extra arguments are dropped (not refused — a refusal would be a
   validation error inside the provider, a crashed turn).
+
+## The description: titles, and the sections under them
+
+`describe_documents(documents, *, tool_names=(), sections=None)` builds what the EXECUTOR reads
+to decide whether to call the tool at all. A title alone often does not say what a document
+covers, and a tool the executor cannot see to be about the question is a tool it does not
+choose — measured on a reference host: a request about a subject that lived only in a SECTION
+went to another tool 3/3 with titles alone and to this one 3/3 with the sections listed, while a
+request that belonged to the other tool stayed there 3/3 both ways.
+
+* **Titles**, as always: one line each, `sanitize_untrusted` + excerpt-fence tags defanged, cut
+  to `MAX_TITLE_CHARS`, JSON string literals, at most `MAX_TITLES_IN_DESCRIPTION` (the rest
+  counted).
+* **`sections`** maps a document's **id** to its headings (by id: two documents may share a
+  title). Each heading goes through the SAME label rule as a title and is written under the
+  titles as one `"Title › Section"` JSON literal per line, at most `MAX_SECTIONS_PER_DOCUMENT`
+  (20) per document and `MAX_SECTIONS_IN_DESCRIPTION` (40) in all; the rest are **counted**
+  (`(and N more sections)`), those of a document past the title ceiling included.
+* **With no section to write** (`None`, `{}`, none for the listed documents) the description is
+  the titles-only one **byte for byte** — pinned by digest against the bytes before this change.
+* **Personal data is the caller's filter.** A heading comes from the file's CONTENT, not from
+  the upload form, so it was never checked; this skill cannot tell a name from a word. The host
+  hands over only headings it has filtered — and `offer_consult_documents` passes **none**.
 
 ## Two searches, fused by the maximum
 
@@ -139,6 +162,6 @@ many of those fitted the answer (`shown`) — never text (`ConsultRecord`, pinne
 ## What stays with the host
 
 Which store and embedder, the owner key, the reader's profile, the two floor values and the
-evidence floor, the contact's
+evidence floor, which section headings (already filtered) go into the description, the contact's
 raw turn, whether the tool is listed in a scope guard's tool table (use the same `offer` result),
 the ledger line for each record, and the publishing rules for documents and titles.

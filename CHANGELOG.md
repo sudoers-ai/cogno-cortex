@@ -15,6 +15,53 @@
 
 ### Added
 
+- **`describe_documents(..., sections=None)`: the SECTIONS under each title in the
+  `consult_documents` description (P9.0).** The executor chooses a tool by its description, and
+  the description listed TITLES only. Measured on a reference host (n=3 per arm), a request about
+  a subject that lived only in a SECTION of a document:
+  - **titles only:** `consult_documents` was chosen **0/3**; the other tool was chosen 3/3;
+  - **sections listed:** `consult_documents` was chosen **3/3**;
+  - the control, a request that belonged to the other tool, went to that tool 3/3 in both arms.
+  - `sections` maps a document's **id** to its headings (by id, not by title: two documents may
+    share a title, and a caller's cleaned title need not equal the raw one). Anything but a
+    mapping (a list, a string, a number) is no sections at all, never an error. Each heading goes
+    through the SAME `_label` as a title (whitespace collapsed, `sanitize_untrusted`,
+    excerpt-fence tags defanged) and is written under the titles as one `"Title › Section"` JSON
+    literal per line.
+  - Ceilings in a scope guard's UNIT (the reference host's facts block, the same numbers):
+    - `MAX_SECTION_CHARS` = 60 per section;
+    - `MAX_SECTIONS_PER_DOCUMENT` = 12;
+    - `MAX_SECTIONS_CHARS` = 1200 characters of section TEXT in all (the headings, not the
+      rendered lines), where the first section that does not fit ends its document's list.
+
+    The rest are COUNTED (`(and N more sections)`), including the sections of a document past the
+    title ceiling. A host that hands over the sections its guard rendered can never have them cut
+    differently here, so the executor never sees a section the guard did not.
+  - **No section to write → today's bytes**, pinned by SHA-256 against four inputs whose digests
+    were computed on `main` b3ca3bb before this change, under nine "no section" shapes (five
+    mappings with nothing usable, and a list, a pair list, a string and a number).
+  - **Personal data is the caller's filter**: a heading comes from the file's CONTENT and was
+    never checked, and this module cannot tell a name from a word. `offer_consult_documents`
+    therefore passes **no** sections; a host hands over only the headings it filtered.
+  - Tests: `tests/unit/test_consult_documents_sections.py` covers:
+    - the twin: sections under their titles; control: without them, none;
+    - byte identity (control: one real section moves the digest);
+    - a planted call, an excerpt fence, a quote and a line break in a section, all defanged;
+    - a long section cut to 60;
+    - the per-document ceiling counted;
+    - the character twin: 3 × 12 sections of 60 characters give exactly 1200 characters of text
+      listed, 16 counted; control: the rendered lines are longer than 1200, so the unit is the
+      text;
+    - `offer_consult_documents` never putting the store's headings in the description (control:
+      the store does return them).
+  - **Mutations, by hand** (anchor `grep -cxF` = 1, `ast.parse`, red, reverted):
+    - the sections never rendered (`if isinstance(sections, Mapping) else ([], 0)` →
+      `if False else ([], 0)`) → `test_twin_the_description_lists_each_section_under_its_title`
+      red, with the four other section tests and the control half of all 36 byte-identity cases
+      (41 failed, 1 passed);
+    - the character budget switched off (`if len(label) > budget:` → `if False:`) →
+      `test_TWIN_the_total_ceiling_is_in_CHARACTERS_of_section_text_the_guards_unit` red.
+
 - **`consult_documents`: a second gate in HYBRID mode, on lexical EVIDENCE.** Among the passages
   that clear the hybrid floor, at least one must share the question's words (its store-side
   `lexical_score` ≥ `DocumentsAccess.lexical_evidence_floor`), or the reading is *nothing

@@ -171,8 +171,9 @@ async def test_TWIN_a_small_document_of_the_shown_passages_is_read_whole_every_i
 
 # ── byte identity: with the reading off (or not applicable), TODAY's payload ─────────────────
 #
-# Digests computed on cortex faeef33 (P9.0, before this change) over the world below, with the
-# store's document ids made deterministic.
+# Digests of the payload on cortex `main` 055cafe (P9.0, before this change) over the world below,
+# with the store's document ids made deterministic. Regenerate them only when the payload changes
+# deliberately.
 
 _TODAY = {"saturday": "bd5c46bca615fbbe16dfed83068dda6e7c649ee7e62c7eb1e579747ff9f0c132",
           "fee": "2c22cbf05cc9ec421f9543afa0a0e2d5fee01e584b3ca678c6dc78e465e19ebf",

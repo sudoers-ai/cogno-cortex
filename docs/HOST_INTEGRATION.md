@@ -104,7 +104,10 @@ A generic skill over a `cogno_engram.DocumentStore` — see
 The profile is applied by the store on every search, so the tool never reads more than the
 executing access may — but choosing the profile, the owner key and the three floors is yours.
 Each record says which gate produced a *nothing relevant* (`cut_by`: `floor` |
-`lexical_evidence`) — see `CONSULT_DOCUMENTS.md` § *The evidence gate*.
+`lexical_evidence`) — see `CONSULT_DOCUMENTS.md` § *The evidence gate* — and how many passages
+passed the hybrid floor by their section heading (`heading_match`, `0` when none did; § *The
+floor's one exception*). A trace that copies the record's counts field by field needs the new
+one added to see it.
 
 ## 8. What stays yours
 

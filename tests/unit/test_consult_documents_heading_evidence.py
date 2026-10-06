@@ -330,14 +330,17 @@ async def test_the_DOCUMENT_title_is_not_a_section_heading():
 
 async def test_the_words_must_be_in_ONE_text_not_spread_over_the_two():
     st, doc = await inn()
-    # «variação» only in the contact's words, «diárias» only in the model's rewrite
-    acc = hybrid(st, user_text="Como foi a variação?")
+    # «variação» only in the contact's words, «diárias» only in the model's rewrite. The contact's
+    # words carry a word NO heading has («inverno»): «Como foi a variação?» alone names its subject
+    # inside the heading, and the INVERSE direction (test_consult_documents_heading_inverse.py)
+    # rescues it — rightly, and not what this test is about.
+    acc = hybrid(st, user_text="Como foi a variação no inverno?")
     await run(acc, "preço das diárias na alta temporada")
     rec = acc.records[0]
     assert len(rec.variants) == 2 and rec.below_floor == 3
     assert rec.outcome == OUTCOME_NOTHING_RELEVANT and rec.heading_match == 0, rec
     # the presence: the rewrite carrying both words
-    acc = hybrid(st, user_text="Como foi a variação?")
+    acc = hybrid(st, user_text="Como foi a variação no inverno?")
     await run(acc, "variação das diárias na alta temporada")
     assert acc.records[0].heading_match == 1
 

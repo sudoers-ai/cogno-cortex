@@ -66,7 +66,13 @@ said *nothing relevant* over the one passage that answered. What that passage do
 section HEADING. So a passage below the hybrid floor PASSES when the leaf of its
 ``heading_path`` names the question: EVERY content word of that heading is in ONE of the texts
 searched (the model's ``query`` or the contact's words), and the heading has at least
-:data:`MIN_HEADING_WORDS` of them. The words are :func:`cogno_engram.lexical.terms` (the engram's
+:data:`MIN_HEADING_WORDS` of them — or the other way round, the question IN the heading: EVERY
+*subject* word of one text searched is in the heading, and that text has at least ONE (a short
+question naming its subject, «Quintarelo?», under «9. Quintarelo — Investimento», which the first
+direction never matches). A subject word is a content word that is not digits-only and not a
+business's FRAME word — the ecosystem's one list,
+:data:`cogno_anima.stages.scope_options.GENERIC_SUBJECT_WORDS`, compared as it is there (cut to
+``EVIDENCE_PREFIX``); a question of frame words only («Escola?») names nothing. The words are :func:`cogno_engram.lexical.terms` (the engram's
 one tokenizer and stopword list, over the general text fold, :func:`cogno_engram.textfold.fold`);
 digits-only tokens — an outline's numbering, a table's years — are not content words; the
 document title is never the section. What it does NOT change: the floor holds for every other
@@ -74,9 +80,11 @@ passage; a rescued passage only fills a slot the floor left empty, so it is alwa
 order stays the score's; it still faces the evidence gate; a lexical result is untouched (its
 floor already IS a words test, and the exception was measured on the hybrid scale only). The
 record counts it (``ConsultRecord.heading_match``), and ``cut_by`` is what it always was when
-nothing passes that way. **Its price:** a question that repeats a section's heading word for word
-lifts that section from under the floor even when the section does not hold the answer — the
-passage is shown with its provenance, and the executor reads it.
+nothing passes that way (either direction counts there; the record does not split them — the
+question and the headings say which). **Its price:** a question that repeats a section's heading
+word for word — or a short question whose subject a heading carries — lifts that section from
+under the floor even when the section does not hold the answer; the passage is shown with its
+provenance, and the executor reads it.
 
 **An embedder failure never kills the turn; a store failure is never "nothing written".** The
 embedder only helps FIND passages, so losing it degrades the search to words
@@ -152,6 +160,7 @@ from typing import Any, Iterable, Mapping, Optional, Sequence
 from pydantic import ConfigDict, field_validator
 
 from cogno_anima.security.prompt_guard import sanitize_untrusted
+from cogno_anima.stages.scope_options import EVIDENCE_PREFIX, GENERIC_SUBJECT_WORDS
 from cogno_anima.vocab import EMBED_UNAVAILABLE
 
 from cogno_cortex.base import BaseTool, ToolContext
@@ -221,6 +230,15 @@ VALID_CUTS: frozenset[str] = frozenset({CUT_FLOOR, CUT_LEXICAL_EVIDENCE})
 #: heading («General», «Other», «Prices») would be that same single word under another name — and
 #: a list of generic words is a list per language that fails OPEN on the one it forgot.
 MIN_HEADING_WORDS = 2
+
+#: The words that never say WHAT a question asks, for the INVERSE direction of the heading test
+#: (module docstring, *Evidence by the HEADING*): a question whose only content words are these
+#: names no section. NOT a list of its own — the ecosystem's ONE list of a business's frame words,
+#: :data:`cogno_anima.stages.scope_options.GENERIC_SUBJECT_WORDS`, compared the way it is compared
+#: there (cut to :data:`cogno_anima.stages.scope_options.EVIDENCE_PREFIX` characters), so a word
+#: added there is generic here the same day.
+_GENERIC_PREFIXES: frozenset[str] = frozenset(lexical_terms(GENERIC_SUBJECT_WORDS,
+                                                            EVIDENCE_PREFIX))
 
 #: Budget defaults — a SAFE mechanism default, not a product decision. The store cuts chunks of
 #: ~2000 characters (``cogno_engram.chunking``), so one excerpt fits whole; three of them plus
@@ -711,12 +729,34 @@ def _heading_words(hit: Any) -> "frozenset[str]":
     return frozenset(w for w in lexical_terms(trail[-1]) if not w.isdigit())
 
 
+def _subject_words(question: "frozenset[str]") -> "frozenset[str]":
+    """The words of a question that say WHAT it asks: its content words minus the digits-only
+    ones (the same rule :func:`_heading_words` applies) and minus the business's frame words
+    (:data:`_GENERIC_PREFIXES`, compared at their prefix)."""
+    return frozenset(w for w in question if not w.isdigit()
+                     and w[:EVIDENCE_PREFIX] not in _GENERIC_PREFIXES)
+
+
 def _heading_matches(hit: Any, asked: "Sequence[frozenset[str]]") -> bool:
-    """Does the section's heading say what the question asks? EVERY content word of the heading
-    in ONE of the texts searched (the model's ``query`` or the contact's words), and at least
-    :data:`MIN_HEADING_WORDS` of them."""
+    """Does the section's heading say what the question asks? In ONE of the texts searched (the
+    model's ``query`` or the contact's words), either direction:
+
+    * **the heading in the question** — EVERY content word of the heading is in it, and the
+      heading has at least :data:`MIN_HEADING_WORDS` of them;
+    * **the question in the heading** — EVERY subject word of the question
+      (:func:`_subject_words`) is in the heading, and the question has at least ONE: a short
+      question that names its subject («Quintarelo?») and a heading that is about it
+      («9. Quintarelo — Investimento»)."""
     words = _heading_words(hit)
-    return len(words) >= MIN_HEADING_WORDS and any(words <= question for question in asked)
+    if not words:
+        return False
+    for question in asked:
+        if len(words) >= MIN_HEADING_WORDS and words <= question:
+            return True
+        subject = _subject_words(question)
+        if subject and subject <= words:
+            return True
+    return False
 
 
 def _clip(text: str, limit: int) -> str:

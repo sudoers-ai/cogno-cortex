@@ -1,5 +1,73 @@
 # Changelog
 
+## Unreleased — the heading test, the INVERSE direction: the question's subject IN the heading
+
+### Changed
+
+- **A short question that names its subject now reads the sections that subject heads.**
+  Measured on a reference host: the EGO's query was ONE word, the subject's name; the store
+  returned three passages, all under the hybrid floor of 0.40 (`cut_by=floor`,
+  `nothing_relevant`), from a document whose sections «9. *Subject* — Investment» and
+  «10. *Subject* — Rental income» held the answer. The heading test needed EVERY content word of
+  the heading in the question (and ≥ 2 of them), which a one-word question never meets. Now
+  `_heading_matches` also accepts the other direction: EVERY subject word of ONE text searched is
+  in the heading, and that text has at least one.
+  - **subject word** = a content word (`cogno_engram.lexical.terms`, as before) that is not
+    digits-only and not a business's frame word. The frame words are NOT a new list: they are
+    `cogno_anima.stages.scope_options.GENERIC_SUBJECT_WORDS`, compared as there (cut to
+    `EVIDENCE_PREFIX` = 6), imported — so a word added there is generic here the same day;
+  - the record: `heading_match` counts the passages rescued, either direction (no new field —
+    every record keeps its old shape);
+  - one existing test changed its INPUT, not its claim:
+    `test_the_words_must_be_in_ONE_text_not_spread_over_the_two` asked «Como foi a variação?»,
+    whose one subject word IS in the heading «Variação das Diárias» — the inverse rescues it,
+    rightly. It now asks «Como foi a variação no inverno?», so it still tests what it is named
+    for (the heading's words split over the two texts).
+
+### Declared limit
+
+A frame VERB the shared list does not carry is a subject word: «O que sabe sobre o *X*?» keeps
+«sabe» («saber» is listed; at 6 characters «sabe» ≠ «saber»), so the contact's sentence ALONE is
+not rescued. The measured shape is — the model's query is the bare subject. The conjugations
+belong in the anima's list (a follow-up there, not a second list here);
+`test_LIMIT_the_literal_sentence_with_sabe_is_not_rescued_by_itself` fails the day they land.
+
+### Unchanged
+
+Everything the direct direction already did: only in hybrid mode, only into slots the floor left
+empty, after everything that cleared it, still facing the evidence gate; a lexical result is
+untouched. The four byte-identity digests against `main` (d42aa6c) still hold.
+
+### On the production scale (`tests/integration/test_consult_documents_postgres.py`)
+
+A PREDICTION, written before the Postgres leg ran it: `kb_chunks.tsv` carries no weights, so a
+one-word query that occurs ONCE in a chunk (only in the heading line) scores `ts_rank_cd` 0.1 →
+0.091 under normalisation 32, below the host's evidence floor of 0.13; twice → 0.167, over it. A
+section whose body names its subject again is read; a TABLE named only in its heading is rescued
+by the floor's exception and then cut by the evidence gate (`cut_by=lexical_evidence`,
+`heading_match=1`) — the gate is deliberately unchanged. Both are pinned there.
+
+### Tests (`tests/unit/test_consult_documents_heading_inverse.py`, invented data only)
+
+- **twin:** a one-word question reads the two sections its subject heads (`heading_match=2`); on
+  `main` the same store reads `nothing_relevant`, `cut_by=floor`, `below_floor=3`. Also: the
+  contact's sentence + the model's bare-subject query; case, punctuation, digits; a two-word
+  subject inside ONE heading.
+- **controls:** a frame-word question («Escola?», «escolas», «Documentos?», «E a empresa?»)
+  lifts none of three sections headed by it — with the frame words switched off the same
+  question lifts all three (the presence); a question of stopwords only; the Wi-Fi password (3
+  forms) reads nothing though the store returned passages; a word only in a body or the document
+  title; one subject word missing from the heading; the slots the floor left.
+- **rescued and then cut:** the record and the evidence line carry `heading_match=1` AND
+  `cut_by=lexical_evidence` together, so a ruler tells «rescued, then cut by the gate» from
+  «never rescued» (`cut_by=floor`, `heading_match=0`). Both fields were already set on every
+  outcome of a search; this pins them in the one case that needs both.
+- **mutations** (each with its anchor counted, 1 before and 0 after, and the result
+  `ast.parse`d; the whole unit suite, 259 tests): without the ≥ 1 condition → 6 red (the four
+  generic controls, the stopwords control, the twin's broken-world half); without the frame
+  words → the 4 generic controls red; without the inverse → 13 red (the twins, the fold, the
+  two-word subject, the slots, rescued-and-cut, and the generic controls' presence).
+
 ## Unreleased — C4: evidence by the section HEADING, the hybrid floor's one exception
 
 ### Added

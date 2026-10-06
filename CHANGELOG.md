@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased — «did you mean…?» over a negative: the sections a *nothing relevant* cut (VQD-2(b))
+
+### Added (OFF by default)
+
+- **`DocumentsAccess.suggest_sections`** (default `False`). The owner's order: instead of «I did
+  not find it», «did you mean A or B?» — with options taken only from what the system read.
+  Measured on a reference host over the documents source: 5 negatives whose passages came back
+  under the floor; in 4 the section that held the answer was among the first three, and in the
+  fifth (a true negative, «is there parking?») the three were unrelated. A title is kept only
+  when it shares a non-frame word with the question: 4/4 right section offered, 0 useless.
+  - **`ConsultRecord.suggested_sections`** — on a *nothing relevant*, at most
+    `MAX_SUGGESTED_SECTIONS` (3) distinct section titles of the passages the reading CUT (under
+    the floor, or past it and cut by the evidence gate), best score first, each sharing a
+    non-frame word with ONE text searched: `cogno_anima.stages.scope_options.has_evidence`,
+    CALLED (the scope guard's own «did you mean» evidence rule), the outline's digits-only
+    numbering left out. `suggested=N` on the evidence line. The payload is unchanged — a
+    neighbouring section is a question for the contact, never an answer for the executor.
+  - **`section`** — an optional argument, in the schema only with `suggest_sections`
+    (`consult_documents_manifest(…, sections=True)`): reads the passages of THIS reader's
+    documents whose section title is the one given (the general fold; the whole title), by one
+    words-only search, no embedding, no floor. `ConsultRecord.section_requested`.
+
+### Unchanged
+
+With `suggest_sections` off: the schema, every payload, every evidence line and every record
+field that existed — the heading tests' `main` digests hold (the digest leaves the two new
+fields out, and the control asserts they are at their defaults). The *nothing relevant* payload
+is the same bytes with the switch ON as well.
+
+### Declared limits
+
+- `section` reads the passages a words-only search returns for the title (at most 50); with a
+  whole-reading budget the section is NOT expanded beyond them.
+- The list is TEXT the business wrote (a heading from a file's content): the host filters it for
+  personal data before showing it.
+- The literal sentence «O que sabe sobre <X>?» is a READING of <X>'s sections with anima ≥ 0.1.1
+  (#19: «sabe» is a frame word), so it offers nothing; under an anima without the verb it would be
+  a negative offering them. Both worlds are pinned by patching the frame words
+  (`test_the_literal_subject_sentence_is_read_or_offered_never_lost`).
+
 ## Unreleased — the question verbs are frame words: requires `cogno-anima>=0.1.1` (2026-10-06)
 
 - `pyproject.toml` declares `cogno-anima>=0.1.1,<0.2`. `consult_documents` imports

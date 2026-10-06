@@ -145,6 +145,28 @@ answer does not say which it was. The administrator's ``version_text`` is never 
 *nothing relevant* is returned before any of this: a negative never expands. With no budget, or
 when nothing is expanded, the answer is the passages, byte for byte.
 
+**«Did you mean…?» over a negative (VQD-2(b)), OFF by default.** A *nothing relevant* is honest
+and, measured on a reference host, often one step from the answer: the passage that held it came
+back under the floor, under a section heading that SHARES a word with the question («the rents?»
+over «11. Evolution of the Rents»). When the host asks for it (``DocumentsAccess.suggest_sections``)
+such a reading also carries, ON THE RECORD (``ConsultRecord.suggested_sections``), a CLOSED list
+of at most :data:`MAX_SUGGESTED_SECTIONS` distinct section titles taken from the passages the
+reading CUT — under the floor, or past it and cut by the evidence gate — best score first, each
+kept only when it shares at least one content word that is NOT a business's frame word with ONE
+of the texts searched. That is the evidence rule of the scope guard's «did you mean»,
+:func:`cogno_anima.stages.scope_options.has_evidence` — the ecosystem's one tokenizer cut to
+``EVIDENCE_PREFIX``, minus ``GENERIC_SUBJECT_WORDS`` — called, never re-written; the outline's
+numbering (digits-only words) is not a word here, the rule :func:`_heading_words` applies. The
+PAYLOAD the executor reads is the *nothing relevant* of always, byte for byte: a neighbouring
+section is a QUESTION for the contact, never an answer, so the executor is not shown one to
+answer from. Asking it is the host's (it owns the words a contact reads and the next turn).
+When the contact chooses one, the executor reads it with ``section`` (in the schema only when
+the access suggests): the passages of THIS reader's documents whose section title IS the one
+given, by one words-only search (no embedding) and no floor — the contact's choice from a closed
+list is the evidence. A title this reader cannot read, or that no section carries, reads nothing.
+With ``suggest_sections`` off, the schema, every payload and every record field that existed are
+what they were, byte for byte.
+
 Requires the ``documents`` extra (``pip install "cogno-cortex[documents]"``).
 """
 
@@ -160,7 +182,8 @@ from typing import Any, Iterable, Mapping, Optional, Sequence
 from pydantic import ConfigDict, field_validator
 
 from cogno_anima.security.prompt_guard import sanitize_untrusted
-from cogno_anima.stages.scope_options import EVIDENCE_PREFIX, GENERIC_SUBJECT_WORDS
+from cogno_anima.stages.scope_options import (EVIDENCE_PREFIX, GENERIC_SUBJECT_WORDS,
+                                              has_evidence)
 from cogno_anima.vocab import EMBED_UNAVAILABLE
 
 from cogno_cortex.base import BaseTool, ToolContext
@@ -177,6 +200,7 @@ try:
         require_profile,
     )
     from cogno_engram.lexical import terms as lexical_terms
+    from cogno_engram.lexical import tokens as lexical_tokens
     from cogno_engram.textfold import fold
 except ImportError as exc:  # pragma: no cover — exercised only in an install without the extra
     raise ImportError(
@@ -230,6 +254,12 @@ VALID_CUTS: frozenset[str] = frozenset({CUT_FLOOR, CUT_LEXICAL_EVIDENCE})
 #: heading («General», «Other», «Prices») would be that same single word under another name — and
 #: a list of generic words is a list per language that fails OPEN on the one it forgot.
 MIN_HEADING_WORDS = 2
+
+#: VQD-2(b): the most section titles a *nothing relevant* reading offers as «did you mean…?»
+#: (module docstring) — distinct, best score first, each sharing a non-frame word with the
+#: question. Three because the measured negatives that had the answer under the floor had it in
+#: the first three passages back, and a question naming more options is a list, not a question.
+MAX_SUGGESTED_SECTIONS = 3
 
 #: The words that never say WHAT a question asks, for the INVERSE direction of the heading test
 #: (module docstring, *Evidence by the HEADING*): a question whose only content words are these
@@ -325,6 +355,15 @@ class ConsultRecord:
     a document and the answer carries the mark that continues it; ``continued`` says this execute
     WAS a continuation (``document`` + ``after``; it searched nothing: no variants, no tokens, floor
     ``0``); ``whole_requested`` says the executor asked for the whole (``whole: true``).
+
+    **«Did you mean…?» (VQD-2(b)).** ``suggested_sections`` — on a *nothing relevant* reading
+    with ``DocumentsAccess.suggest_sections`` on, the CLOSED list of section titles the reading
+    cut that share a non-frame word with the question (module docstring), at most
+    :data:`MAX_SUGGESTED_SECTIONS`; ``()`` otherwise. They are the business's own headings,
+    sanitised like the provenance header — the one TEXT this record carries, for the host to ask
+    the contact with; a heading comes from a file's content, so a host filters it before showing
+    it to anybody. ``section_requested`` says this execute read a section BY TITLE (``section``):
+    one words-only search, no embedding, no floor.
     """
 
     embed_model: str
@@ -350,6 +389,8 @@ class ConsultRecord:
     has_more: bool = False
     whole_requested: bool = False
     heading_match: int = 0
+    suggested_sections: tuple[str, ...] = ()
+    section_requested: bool = False
 
 
 def _unit(name: str, value: object) -> float:
@@ -401,6 +442,10 @@ class DocumentsAccess:
     * ``section_mode`` — for a document LONGER than ``whole_doc_chars``, show the level-2 blocks
       that hold its passages instead of the passages alone. ``False`` by default: measured on a
       reference host it did not beat the passages (module docstring, *Reading a document whole*).
+    * ``suggest_sections`` — VQD-2(b): a *nothing relevant* reading records the section titles it
+      cut that share a word with the question (``ConsultRecord.suggested_sections``), and the
+      schema offers ``section`` to read one of them by title. ``False`` (the default): neither,
+      and every schema, payload and record is today's, byte for byte.
     """
 
     store: Any
@@ -420,6 +465,7 @@ class DocumentsAccess:
     whole_doc_chars: int = 0
     max_whole_chars: int = 0
     section_mode: bool = False
+    suggest_sections: bool = False
 
     def __post_init__(self) -> None:
         require_owner(self.owner_key)
@@ -451,6 +497,8 @@ class DocumentsAccess:
         _bounded_int("max_whole_chars", self.max_whole_chars, 0)
         if not isinstance(self.section_mode, bool):
             raise TypeError("section_mode must be a bool")
+        if not isinstance(self.suggest_sections, bool):
+            raise TypeError("suggest_sections must be a bool")
         if self.max_whole_chars:
             _bounded_int("max_whole_chars", self.max_whole_chars, MIN_ANSWER_CHARS)
             if not callable(getattr(self.store, "read_served", None)):
@@ -616,19 +664,35 @@ _READING_PARAMETERS: dict[str, Any] = {
 }
 
 
-def consult_documents_manifest(description: str, *, reading: bool = False) -> SkillManifest:
+#: VQD-2(b): the OPTIONAL argument that reads one section by its title, in the schema only when
+#: the access suggests sections (``DocumentsAccess.suggest_sections``); without it the schema is
+#: today's, byte for byte.
+_SECTION_PARAMETERS: dict[str, Any] = {
+    "section": {"type": "string",
+                "description": "Only when the contact CHOSE one of the section titles offered "
+                               "after a reading that found nothing relevant: that title, exactly "
+                               "as offered. The passages of that section are read. Leave it out "
+                               "otherwise."},
+}
+
+
+def consult_documents_manifest(description: str, *, reading: bool = False,
+                               sections: bool = False) -> SkillManifest:
     """The manifest the host registers for ONE turn — its ``description`` is per reader
     (:func:`describe_documents`), which is why this is a function and not a constant.
 
     ``reading=True`` adds the whole reading's optional arguments (``whole``, ``document``,
     ``after``) — pass it exactly when the access has a ``max_whole_chars`` budget; without it the
-    parameters are today's, byte for byte."""
+    parameters are today's, byte for byte. ``sections=True`` adds ``section`` (VQD-2(b)) — pass it
+    exactly when the access has ``suggest_sections``; without it, today's, byte for byte."""
     text = str(description or "").strip()
     if not text:
         raise ValueError("a consult_documents manifest needs a description (describe_documents)")
     parameters = json.loads(json.dumps(_PARAMETERS))   # a fresh copy per manifest
     if reading:
         parameters["properties"].update(json.loads(json.dumps(_READING_PARAMETERS)))
+    if sections:
+        parameters["properties"].update(json.loads(json.dumps(_SECTION_PARAMETERS)))
     return SkillManifest(
         name=CONSULT_DOCUMENTS,
         description=text,
@@ -655,7 +719,8 @@ async def offer_consult_documents(access: DocumentsAccess) -> Optional[SkillMani
     if not docs:
         return None
     return consult_documents_manifest(describe_documents(docs, tool_names=access.tool_names),
-                                      reading=access.max_whole_chars > 0)
+                                      reading=access.max_whole_chars > 0,
+                                      sections=access.suggest_sections)
 
 
 # ── the execute half ─────────────────────────────────────────────────────────────────
@@ -720,13 +785,44 @@ def _heading_words(hit: Any) -> "frozenset[str]":
     is the outline's numbering («12. Room rates») or the years a table covers, which a
     contact does not repeat when asking what the section is ABOUT. The document title (the head
     of the path, the rule :func:`_provenance` applies) is never the section."""
+    leaf = _section_title(hit)
+    if not leaf:
+        return frozenset()
+    return frozenset(w for w in lexical_terms(leaf) if not w.isdigit())
+
+
+def _section_title(hit: Any) -> str:
+    """The SECTION a passage sits under — the leaf of its ``heading_path``, raw — or ``""`` when
+    it sits under the document title alone (the head of the path is the title, never a section:
+    the rule :func:`_provenance` applies)."""
     trail = [str(p) for p in (getattr(hit, "heading_path", ()) or ())]
     title = str(getattr(hit, "title", "") or "")
     if trail and title and trail[0].casefold() == title.casefold():
         trail = trail[1:]
-    if not trail:
-        return frozenset()
-    return frozenset(w for w in lexical_terms(trail[-1]) if not w.isdigit())
+    return trail[-1] if trail else ""
+
+
+def _suggested_sections(fused: "Sequence[_Fused]", texts: "Sequence[str]",
+                        names: "set[str]") -> "tuple[str, ...]":
+    """VQD-2(b) — the section titles a *nothing relevant* reading may offer (module docstring):
+    over the passages it CUT, best score first, each distinct title (as :func:`_label` writes it)
+    whose words — minus the outline's digits-only numbering — share a non-frame word with ONE of
+    ``texts`` (:func:`cogno_anima.stages.scope_options.has_evidence`, called as it is there), at
+    most :data:`MAX_SUGGESTED_SECTIONS`. A passage under the document title alone offers
+    nothing. Pure."""
+    out: list[str] = []
+    for f in fused:
+        leaf = _section_title(f.hit)
+        label = _label(leaf, names) if leaf else ""
+        if not label or label in out:
+            continue
+        subject = " ".join(w for w in lexical_tokens(leaf) if not w.isdigit())
+        if not any(has_evidence(text, subject) for text in texts):
+            continue
+        out.append(label)
+        if len(out) >= MAX_SUGGESTED_SECTIONS:
+            break
+    return tuple(out)
 
 
 def _subject_words(question: "frozenset[str]") -> "frozenset[str]":
@@ -1166,8 +1262,11 @@ class ConsultDocumentsTool(BaseTool):
     whole: bool = False
     document: str = ""
     after: Optional[int] = None
+    #: VQD-2(b): a section title to read — read ONLY when the access suggests sections; with it
+    #: off it is ignored like any other extra.
+    section: str = ""
 
-    @field_validator("query", "document", mode="before")
+    @field_validator("query", "document", "section", mode="before")
     @classmethod
     def _as_text(cls, value: Any) -> str:
         # The schema says string; a model that sends a number must not crash the turn.
@@ -1206,6 +1305,8 @@ class ConsultDocumentsTool(BaseTool):
                           "'the documents do not say'.", "config_error: no documents access")
         if access.max_whole_chars and self.document.strip():
             return await self._continue(access)
+        if access.suggest_sections and self.section.strip():
+            return await self._read_section(access)
         variants = _variants(self.query, access.user_text)
         if not variants:
             return _error("Say what to look up in the documents.", "empty_query")
@@ -1303,6 +1404,13 @@ class ConsultDocumentsTool(BaseTool):
                    ([f"cut_by={cut}"] if cut else []) + \
                    [f"degraded={m}" for m in base.degradations]
         if not passed:
+            # VQD-2(b): the closed list rides the RECORD, for the host to ask with; the payload
+            # the executor reads is the negative of always (module docstring).
+            if access.suggest_sections:
+                offered = _suggested_sections(fused, [t for _, t in variants], names)
+                if offered:
+                    base = replace(base, suggested_sections=offered)
+                    evidence.append(f"suggested={len(offered)}")
             self._record(access, base)
             # A real answer, not an error: the documents WERE read and nothing in them is close
             # enough. That grounds a negative reply — the one thing an empty read is good for.
@@ -1404,6 +1512,59 @@ class ConsultDocumentsTool(BaseTool):
                            evidence=evidence + (["has_more"] if mark else []),
                            usage={"embedding_tokens": 0, "embedding_calls": 0})
 
+    async def _read_section(self, access: DocumentsAccess) -> SkillResult:
+        """VQD-2(b) — the passages of the section whose title is ``section``, for THIS reader.
+
+        One WORDS-only search with the title as its text (no embedding: the selection is by the
+        heading, and a vector would only re-rank what is filtered anyway), at most
+        :data:`MAX_LIMIT` passages, of which those whose section title — as :func:`_label`
+        writes it, the way the title was offered — is the one given (the general fold: case,
+        accents, punctuation, whitespace) are shown, best first, with no floor. The store's
+        profile filter applies as on every search, so a title of a document this reader cannot
+        read reads nothing, and the answer does not say which it was."""
+        names = _names(access.tool_names)
+        wanted = " ".join(self.section.split())
+        base = ConsultRecord(embed_model=access.embed_model, embedding_tokens=0,
+                             embedding_calls=0, usage_reported=True, variants=(VARIANT_MODEL,),
+                             lexical=True, floor=0.0, outcome=OUTCOME_NOTHING_RELEVANT,
+                             section_requested=True)
+        usage = {"embedding_tokens": 0, "embedding_calls": 0}
+        try:
+            result = await access.store.search(access.owner_key, profile=access.profile,
+                                               text=wanted, vector=None, embed_model=None,
+                                               limit=MAX_LIMIT)
+        except Exception as exc:  # noqa: BLE001 — a broken store is not "nothing written"
+            logger.warning("event=consult_documents_search_failed error=%s", type(exc).__name__)
+            self._record(access, replace(base, outcome=OUTCOME_SEARCH_FAILED))
+            return _error("The document search failed — do not treat this as 'the documents "
+                          "do not say'.", f"search_failed: {type(exc).__name__}")
+        marks = tuple(sorted(set(result.degradations or ())))
+        seen: set[str] = set()
+        mine: list[Any] = []
+        for hit in result.hits:
+            leaf = _section_title(hit)
+            if leaf and str(hit.id) not in seen and _same(_label(leaf, names), wanted):
+                seen.add(str(hit.id))
+                mine.append(hit)
+        evidence = ["section", f"hits={len(mine)}"] + [f"degraded={m}" for m in marks]
+        if not mine:
+            self._record(access, replace(base, degradations=marks))
+            return SkillResult(skill_name=CONSULT_DOCUMENTS, status="success",
+                               payload=("No section with that title in the documents this "
+                                        "business published. To look the question up, call "
+                                        f"{CONSULT_DOCUMENTS} with query."),
+                               evidence=evidence, usage=usage)
+        payload, shown = render_excerpts(mine, names=names,
+                                         max_excerpt_chars=access.max_excerpt_chars,
+                                         max_answer_chars=access.max_answer_chars)
+        lexical_scores = tuple(round(float(h.lexical_score), 6) for h in mine)
+        self._record(access, replace(
+            base, outcome=OUTCOME_HITS, degradations=marks,
+            hit_ids=tuple(str(h.id) for h in mine), hit_variants=(VARIANT_MODEL,) * len(mine),
+            scores=lexical_scores, lexical_scores=lexical_scores, shown=shown))
+        return SkillResult(skill_name=CONSULT_DOCUMENTS, status="success", payload=payload,
+                           evidence=evidence + [f"chunk={h.id}" for h in mine], usage=usage)
+
     @staticmethod
     def _record(access: DocumentsAccess, record: ConsultRecord) -> None:
         if access.records is not None:
@@ -1431,6 +1592,7 @@ __all__ = [
     "CUT_LEXICAL_EVIDENCE",
     "VALID_CUTS",
     "MIN_HEADING_WORDS",
+    "MAX_SUGGESTED_SECTIONS",
     "DEFAULT_LIMIT",
     "DEFAULT_MAX_EXCERPT_CHARS",
     "DEFAULT_MAX_ANSWER_CHARS",

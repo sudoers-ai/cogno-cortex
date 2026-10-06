@@ -128,6 +128,16 @@ direction, the heading in the question or the question's subject in the heading;
 floor's one exception*). A trace that copies the record's counts field by field needs the new
 one added to see it.
 
+**«Did you mean…?» (VQD-2(b), opt-in).** `DocumentsAccess(suggest_sections=True)` makes a
+*nothing relevant* record `suggested_sections` — at most 3 section titles of the passages the
+reading cut that share a non-frame word with the question (`has_evidence`, the scope guard's own
+rule) — and adds `section` to the schema (pass the same flag as `consult_documents_manifest(…,
+sections=True)` if you build the manifest yourself). The payload the executor reads does not
+change: asking the contact, filtering the titles for personal data before showing them, and
+carrying the choice to the next turn (`section="<the title>"`) are yours. Off (the default):
+schema, payloads and records byte for byte. See `CONSULT_DOCUMENTS.md` § *«Did you mean…?» over
+a negative*.
+
 ## 8. What stays yours
 
 Concrete skills (the product), shell/http/remote providers, persona selection

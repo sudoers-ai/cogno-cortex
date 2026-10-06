@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — the question verbs are frame words: requires `cogno-anima>=0.1.1` (2026-10-06)
+
+- `pyproject.toml` declares `cogno-anima>=0.1.1,<0.2`. `consult_documents` imports
+  `cogno_anima.stages.scope_options` (since #17), and that module only exists from anima 0.1.1; the
+  old floor (`>=0.1`) admitted an anima that fails on the import.
+- anima #207 puts the question verbs (sabe, sabem, conhece, fala, falam, falar) in
+  `GENERIC_SUBJECT_WORDS`, so the declared LIMIT of #17 is gone: «O que sabe sobre o *X*?» rescues
+  by itself. `test_LIMIT_the_literal_sentence_with_sabe_is_not_rescued_by_itself` becomes
+  `test_TWIN_the_literal_sentence_with_sabe_is_rescued_by_itself`. `docs/CONSULT_DOCUMENTS.md`
+  says it, with the price: «conhecimento» cuts like «conhece».
+
 ## Unreleased — docs: the README and HOST_INTEGRATION catch up with #12–#17
 
 ### Documentation

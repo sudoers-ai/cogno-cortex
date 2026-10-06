@@ -173,13 +173,14 @@ the word it forgot. The price is said, not hidden: a SPECIFIC one-word heading (
 not get the exception from the first direction, and is judged by the floor as before — unless
 the question's subject words are ALL in it (*Parking?*), which is the second direction.
 
-**The second direction's declared limit.** A frame VERB the shared list does not carry is a
-subject word: «O que sabe sobre o *X*?» keeps «sabe» (the list has «saber», and at six characters
-«sabe» is not «saber»), so the contact's sentence alone names a word no heading has. It is
-rescued when the model's `query` names the subject alone — the measured shape. The conjugations
-belong in the shared list, not in a second one here; until they are added there,
-`test_LIMIT_the_literal_sentence_with_sabe_is_not_rescued_by_itself` pins the limit and fails the
-day they are.
+**The question verbs are frame words (anima 0.1.1).** «O que sabe sobre o *X*?» used to keep
+«sabe» as a subject word: the shared list had «saber», and at six characters «sabe» is not
+«saber», so the contact's sentence alone named a word no heading has. anima #207 put the question
+verbs (sabe, sabem, conhece, fala, falam, falar) in the shared list, and this repo requires
+`cogno-anima>=0.1.1`: the sentence now names only its subject and, by itself, rescues the subject's sections.
+`test_TWIN_the_literal_sentence_with_sabe_is_rescued_by_itself` pins it. The price comes with the
+list: «conhecimento» cuts to the same six characters as «conhece», so «base de conhecimento» names
+no subject either.
 
 What it does **not** change:
 

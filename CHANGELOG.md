@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — docs: the README and HOST_INTEGRATION catch up with #12–#17
+
+### Documentation
+
+- `README.md`, § *Generic skills*: the `consult_documents` row now says the skill can read a
+  document whole (#13). A short list names what a host wires beyond the snippet: the whole read
+  (#13), the sections in the description (#12, #14) and the heading evidence (#15, #17). It also
+  says that since #17 the skill needs a cogno-anima with `stages.scope_options` (cogno-anima #200),
+  which the `>=0.1,<0.2` pin cannot express.
+- `docs/HOST_INTEGRATION.md` § 7: the optional wiring for the whole read (`max_whole_chars`,
+  `whole_doc_chars`, `section_mode`, the store's `read_served`, #13) and for sections in the
+  description (`describe_documents(sections=)` + `consult_documents_manifest(reading=)`, #12/#14).
+  Before this, both were only in `docs/CONSULT_DOCUMENTS.md`.
+- #16 (the whole-read digests cite a `main` SHA) landed without a changelog line on purpose. This
+  entry records it: a comment-only test change, with no code change.
+
 ## Unreleased — the heading test, the INVERSE direction: the question's subject IN the heading
 
 ### Changed

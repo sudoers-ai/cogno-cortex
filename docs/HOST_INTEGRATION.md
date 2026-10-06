@@ -101,6 +101,24 @@ A generic skill over a `cogno_engram.DocumentStore` — see
 4. after the turn, each `ConsultRecord` in the list is one call: bill `embedding_tokens`
    (`usage_reported=False` means the count is UNKNOWN, not zero).
 
+Two optional pieces, both OFF unless you set them:
+
+- **Reading a document whole** (#13). Give the `DocumentsAccess` a budget, `max_whole_chars`
+  (at least `MIN_ANSWER_CHARS`), and optionally `whole_doc_chars` (a document at most that long is
+  read whole without being asked; at most the budget) and `section_mode` (`False` by default). The
+  store must have `read_served` (cogno-engram #76). `__post_init__` raises on a budget without it,
+  and on `whole_doc_chars`/`section_mode` without a budget. With a budget, `offer_consult_documents`
+  adds the `whole`/`document`/`after` arguments to the schema; without one, the schema is
+  unchanged.
+- **Sections in the description** (#12; one line per document since #14). `offer_consult_documents`
+  lists titles only. To list sections, build the manifest yourself:
+  `consult_documents_manifest(describe_documents(docs, tool_names=…, sections={doc.id: headings}),
+  reading=access.max_whole_chars > 0)`. `sections` is keyed by document **id**, and the headings
+  are document CONTENT. Hand over only headings you have already filtered for personal data, ideally
+  the same ones your scope guard renders. The ceilings (`MAX_SECTION_CHARS`,
+  `MAX_SECTIONS_PER_DOCUMENT`, `MAX_SECTIONS_CHARS`) are at most a guard's, so the executor never
+  sees a section the guard did not.
+
 The profile is applied by the store on every search, so the tool never reads more than the
 executing access may — but choosing the profile, the owner key and the three floors is yours.
 Each record says which gate produced a *nothing relevant* (`cut_by`: `floor` |

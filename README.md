@@ -114,7 +114,7 @@ as an injected parameter. Nothing under `cogno_cortex.skills` is imported by `im
 
 | Skill | Extra | What it does |
 |---|---|---|
-| `consult_documents` | `documents` (pulls `cogno-engram`) | searches a `cogno_engram.DocumentStore`: passages with provenance, or an honest "nothing relevant" |
+| `consult_documents` | `documents` (pulls `cogno-engram`) | searches a `cogno_engram.DocumentStore`: passages with provenance, or an honest "nothing relevant"; with a budget, reads a document WHOLE (#13) |
 
 ```bash
 pip install "cogno-cortex[documents]"
@@ -137,7 +137,24 @@ if manifest is not None:
 ```
 
 The full contract — floors, the two fused searches, the record, what the host owns — is in
-[`docs/CONSULT_DOCUMENTS.md`](docs/CONSULT_DOCUMENTS.md).
+[`docs/CONSULT_DOCUMENTS.md`](docs/CONSULT_DOCUMENTS.md). Three things a host wires beyond the
+snippet above, each OFF until it asks (the wiring is in
+[`docs/HOST_INTEGRATION.md`](docs/HOST_INTEGRATION.md) § 7):
+
+- **the whole-document read** (#13): `DocumentsAccess(max_whole_chars=…, whole_doc_chars=…)`
+  reads the documents of the shown passages whole, up to a budget, and adds the optional
+  `whole`/`document`/`after` arguments to the schema; it needs a store with `read_served`
+  (cogno-engram #76) and is checked when the access is built;
+- **the sections in the tool description** (#12, grouped by document since #14):
+  `describe_documents(docs, sections={doc_id: headings})`. `offer_consult_documents` passes none,
+  because a heading is document CONTENT and filtering personal data out of it is the host's job;
+- **the section heading as evidence** (#15, both directions since #17) needs no wiring: a passage
+  under the hybrid floor passes when its heading and the question name each other, and
+  `ConsultRecord.heading_match` counts them.
+
+Since #17 the skill imports `cogno_anima.stages.scope_options` (the shared frame-word list), which
+arrived in cogno-anima #200. The `cogno-anima>=0.1,<0.2` pin cannot express that, so an older
+cogno-anima checkout fails on `import cogno_cortex.skills.consult_documents`.
 
 ## What stays at the host
 

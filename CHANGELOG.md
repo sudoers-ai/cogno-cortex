@@ -58,10 +58,15 @@ by the floor's exception and then cut by the evidence gate (`cut_by=lexical_evid
   question lifts all three (the presence); a question of stopwords only; the Wi-Fi password (3
   forms) reads nothing though the store returned passages; a word only in a body or the document
   title; one subject word missing from the heading; the slots the floor left.
-- **mutations** (each with its anchor counted and the result `ast.parse`d): without the ≥ 1
-  condition → 6 tests red (the generic controls, the stopwords control, the twin's broken-world
-  half); without the frame words → the 4 generic controls red; without the inverse → 12 red (the
-  twins, the fold, the two-word subject, the slots, and the generic controls' presence).
+- **rescued and then cut:** the record and the evidence line carry `heading_match=1` AND
+  `cut_by=lexical_evidence` together, so a ruler tells «rescued, then cut by the gate» from
+  «never rescued» (`cut_by=floor`, `heading_match=0`). Both fields were already set on every
+  outcome of a search; this pins them in the one case that needs both.
+- **mutations** (each with its anchor counted, 1 before and 0 after, and the result
+  `ast.parse`d; the whole unit suite, 259 tests): without the ≥ 1 condition → 6 red (the four
+  generic controls, the stopwords control, the twin's broken-world half); without the frame
+  words → the 4 generic controls red; without the inverse → 13 red (the twins, the fold, the
+  two-word subject, the slots, rescued-and-cut, and the generic controls' presence).
 
 ## Unreleased — C4: evidence by the section HEADING, the hybrid floor's one exception
 

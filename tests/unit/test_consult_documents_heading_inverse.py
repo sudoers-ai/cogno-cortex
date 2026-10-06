@@ -239,6 +239,26 @@ async def test_it_only_fills_the_slots_the_floor_left():
     rec = acc.records[0]
     assert rec.heading_match == 1 and len(rec.hit_ids) == 1
 
-# The evidence gate and the lexical-result guard are the SAME code the direct direction goes
-# through (the inverse lives inside ``_heading_matches``, called only in hybrid mode, before the
-# gate); test_consult_documents_heading_evidence.py pins both.
+async def test_RESCUED_AND_CUT_the_record_says_both_heading_match_and_cut_by():
+    # The shape the Postgres leg predicts for a TABLE named only in its heading: the inverse lifts
+    # it from under the floor, then the evidence gate (unchanged) cuts the reading. The record and
+    # the evidence line carry BOTH sides, so a ruler reading them tells «rescued, then cut by the
+    # gate» from «never rescued» (cut_by=floor, heading_match=0).
+    st, doc = await estate(chunks=(GARDEN, INTERNET, INVESTMENT))
+    acc = hybrid(st, user_text="Quintarelo 2023", lexical_evidence_floor=0.9)
+    res = await run(acc, "Quintarelo 2023")
+    rec = acc.records[0]
+    assert rec.heading_match == 1 and rec.cut_by == "lexical_evidence", rec
+    assert rec.outcome == OUTCOME_NOTHING_RELEVANT and rec.hit_ids == ()
+    assert rec.lexical_evidence == 0.5, "the rescued table carries one of the two words"
+    assert "heading_match=1" in res.evidence and "cut_by=lexical_evidence" in res.evidence
+    # the presence: the same store with the gate off reads the table it rescued
+    off = hybrid(st, user_text="Quintarelo 2023", lexical_evidence_floor=0.0)
+    await run(off, "Quintarelo 2023")
+    assert off.records[0].outcome == OUTCOME_HITS and off.records[0].hit_ids == (kb(doc, 2),)
+    assert off.records[0].heading_match == 1 and off.records[0].cut_by is None
+
+
+# The lexical-result guard is the SAME code the direct direction goes through (the inverse lives
+# inside ``_heading_matches``, called only in hybrid mode); test_consult_documents_heading_evidence.py
+# pins it.

@@ -273,3 +273,64 @@ async def test_HEADING_on_postgres_a_table_section_under_the_floor_passes_by_its
     await _run(one, "Como foi a variação do câmbio?")
     assert one.records[0].outcome == OUTCOME_NOTHING_RELEVANT and one.records[0].cut_by == "floor"
     assert one.records[0].heading_match == 0 and one.records[0].below_floor >= 1
+
+
+# ── the heading test, the INVERSE direction, on the production scale ─────────────────────
+#
+# The FORM of the second measured case, INVENTED data: the executor's query is ONE word, the
+# subject's name, and two sections carry it in their heading next to a word the question does
+# not («9. Quintarelo — Investimento»). Only the inverse direction can match there.
+#
+# A PREDICTION this leg measures, written before it ran: ``kb_chunks.tsv`` has no weights, so a
+# one-word query that occurs ONCE in a chunk (the heading line the content starts with) has
+# ``ts_rank_cd = 0.1`` and, under normalisation 32 (``r / (r + 1)``), a lexical score of 0.091 —
+# under the host's evidence floor of 0.13. Twice → 0.2 → 0.167, over it. So a section whose body
+# names its subject again is read; a TABLE that names it only in its heading is rescued by the
+# floor's exception and then cut by the evidence gate, as the direct direction would be. The
+# gate is deliberately unchanged here.
+
+INVESTMENT = ("| Ano | Aporte |\n|---|---|\n| 2019 | R$ 480.000 |\n| 2022 | R$ 95.000 |",
+              ("9. Quintarelo — Investimento",), 4, QUARTER)
+RENT = ("O Quintarelo rendeu em aluguel:\n\n| Ano | Valor |\n|---|---|\n| 2023 | R$ 62.400 |\n"
+        "| 2024 | R$ 66.000 |", ("10. Quintarelo — Receita de Aluguel",), 5, QUARTER)
+INVEST_NAMED = ("O Quintarelo recebeu estes aportes:\n\n" + INVESTMENT[0], INVESTMENT[1], 4,
+                QUARTER)
+HOUSE = ("A rede da casa principal chama-se Casa-Norte; a senha fica com o caseiro.",
+         ("4. Casa Principal — Serviços",), 3, QUARTER)
+ESTATE = "Relatório patrimonial da Família Brandomar"
+
+
+async def test_HEADING_INVERSE_on_postgres_a_one_word_question_reads_the_sections_it_heads(pg):
+    owner = f"acme{uuid4().hex[:6]}/front-desk"
+    doc = await _publish(pg, owner, title=ESTATE, profiles=("EMPLOYEE",),
+                         chunks=[HOUSE, INVEST_NAMED, RENT])
+    acc = _access(pg, owner, hybrid_floor=0.4, lexical_evidence_floor=0.13,
+                  user_text="O que sabe sobre o Quintarelo?")
+    res = await _run(acc, "Quintarelo")
+    rec = acc.records[0]
+    assert not rec.lexical and rec.outcome == OUTCOME_HITS, rec
+    assert {f"kb:{doc}.1.1", f"kb:{doc}.1.2"} <= set(rec.hit_ids), rec
+    assert rec.heading_match == sum(1 for s in rec.scores if s < 0.4), rec
+    assert "| 2022 | R$ 95.000 |" in res.payload and "| 2024 | R$ 66.000 |" in res.payload
+    # the CONTROL on the same store: the Wi-Fi password names no heading
+    wifi = _access(pg, owner, hybrid_floor=0.4, lexical_evidence_floor=0.13,
+                   user_text="Qual a senha do Wi-Fi?")
+    await _run(wifi, "Qual a senha do Wi-Fi?")
+    assert wifi.records[0].heading_match == 0, wifi.records[0]
+    assert not {f"kb:{doc}.1.1", f"kb:{doc}.1.2"} & set(wifi.records[0].hit_ids)
+
+
+async def test_HEADING_INVERSE_on_postgres_a_table_named_only_in_its_heading_meets_the_gate(pg):
+    owner = f"acme{uuid4().hex[:6]}/front-desk"
+    doc = await _publish(pg, owner, title=ESTATE, profiles=("EMPLOYEE",),
+                         chunks=[HOUSE, INVESTMENT])
+    acc = _access(pg, owner, hybrid_floor=0.4, lexical_evidence_floor=0.13, user_text="Quintarelo")
+    await _run(acc, "Quintarelo")
+    rec = acc.records[0]
+    assert rec.heading_match == 1, rec
+    assert rec.lexical_evidence is not None and rec.lexical_evidence < 0.13, rec
+    assert rec.outcome == OUTCOME_NOTHING_RELEVANT and rec.cut_by == CUT_LEXICAL_EVIDENCE, rec
+    # the presence: the same store with the evidence gate off reads the table
+    off = _access(pg, owner, hybrid_floor=0.4, lexical_evidence_floor=0.0, user_text="Quintarelo")
+    await _run(off, "Quintarelo")
+    assert off.records[0].outcome == OUTCOME_HITS and off.records[0].hit_ids == (f"kb:{doc}.1.1",)

@@ -38,6 +38,15 @@ Everything the direct direction already did: only in hybrid mode, only into slot
 empty, after everything that cleared it, still facing the evidence gate; a lexical result is
 untouched. The four byte-identity digests against `main` (d42aa6c) still hold.
 
+### On the production scale (`tests/integration/test_consult_documents_postgres.py`)
+
+A PREDICTION, written before the Postgres leg ran it: `kb_chunks.tsv` carries no weights, so a
+one-word query that occurs ONCE in a chunk (only in the heading line) scores `ts_rank_cd` 0.1 →
+0.091 under normalisation 32, below the host's evidence floor of 0.13; twice → 0.167, over it. A
+section whose body names its subject again is read; a TABLE named only in its heading is rescued
+by the floor's exception and then cut by the evidence gate (`cut_by=lexical_evidence`,
+`heading_match=1`) — the gate is deliberately unchanged. Both are pinned there.
+
 ### Tests (`tests/unit/test_consult_documents_heading_inverse.py`, invented data only)
 
 - **twin:** a one-word question reads the two sections its subject heads (`heading_match=2`); on

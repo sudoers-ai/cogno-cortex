@@ -85,11 +85,17 @@ def hybrid(st, **kw) -> DocumentsAccess:
     return access(st, **base)
 
 
+_NOT_ON_MAIN = frozenset({"heading_match", "suggested_sections", "section_requested"})
+
+
 def legacy_digest(record, result, doc: str) -> str:
     """What the tree before this change would have produced, as one digest: the record WITHOUT
     the new field, the payload and the evidence — the document's id (a fresh ``uuid4`` per run)
-    written as ``DOC``. Pinned below from ``main`` (d42aa6c)."""
-    fields = {k: v for k, v in dataclasses.asdict(record).items() if k != "heading_match"}
+    written as ``DOC``. Pinned below from ``main`` (d42aa6c). The fields that tree did not have
+    are left out: ``heading_match`` (this change) and the two of VQD-2(b) (``suggested_sections``,
+    ``section_requested`` — at their defaults whenever the access does not suggest sections, which
+    the control below asserts, so leaving them out hides nothing)."""
+    fields = {k: v for k, v in dataclasses.asdict(record).items() if k not in _NOT_ON_MAIN}
     blob = json.dumps({"record": fields, "payload": result.payload,
                        "evidence": list(result.evidence)}, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(blob.replace(doc, "DOC").encode()).hexdigest()
@@ -247,6 +253,7 @@ async def test_CONTROL_a_world_the_exception_does_not_touch_is_main_byte_for_byt
     rec = acc.records[0]
     assert getattr(rec, "heading_match", 0) == 0, rec
     assert "heading_match" not in " ".join(res.evidence)
+    assert rec.suggested_sections == () and rec.section_requested is False, rec
     assert legacy_digest(rec, res, doc) == MAIN_DIGESTS[name], name
 
 

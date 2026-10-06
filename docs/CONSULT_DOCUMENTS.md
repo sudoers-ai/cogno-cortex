@@ -23,6 +23,7 @@ from cogno_cortex.skills.consult_documents import (
     ConsultRecord,            # what one call spent and found (content-free)
     MODE_PASSAGES, MODE_SECTION, MODE_DOCUMENT, VALID_MODES,   # how the documents were shown
     MIN_HEADING_WORDS,        # 2 — content words a section heading needs to be evidence
+    MAX_SUGGESTED_SECTIONS,   # 3 — section titles a negative may offer (VQD-2(b))
     OUTCOME_CONTINUED, OUTCOME_UNREADABLE,                      # a continuation's outcomes
     offer_consult_documents,  # async: manifest for this reader, or None
     describe_documents,       # pure: the tool description from the readable titles (+ sections)
@@ -49,6 +50,7 @@ from cogno_cortex.skills.consult_documents import (
 | `max_whole_chars` | the budget of an answer that reads documents whole (P9); `0` (default) = off — no `whole`/`document`/`after` in the schema, the passages byte for byte; when set, ≥ `MIN_ANSWER_CHARS` and the store must have `read_served` |
 | `whole_doc_chars` | a document of the passed passages with at most this much text is read whole without being asked (`0` = only on `whole: true`); ≤ `max_whole_chars` |
 | `section_mode` | for a document longer than `whole_doc_chars`, the union of the level-2 blocks holding its passages; `False` by default (see *Reading a document whole*) |
+| `suggest_sections` | VQD-2(b): a *nothing relevant* records the section titles it cut that share a word with the question, and the schema offers `section`; `False` by default — schema, payloads and records byte for byte (see *«Did you mean…?» over a negative*) |
 
 ## Two gates
 
@@ -262,6 +264,38 @@ documents of the shown passages whole in 20 — the documents served there were 
 * **A whole read that fails** keeps the passages the search found and marks the record
   `whole_read_unavailable` — the search worked, so it is not an error.
 
+## «Did you mean…?» over a negative (VQD-2(b), OFF by default)
+
+A *nothing relevant* is honest and, measured on a reference host, often one step from the answer:
+the passage that held it came back under the floor, under a section heading that SHARES a word
+with the question («the rents?» over «11. Evolution of the Rents»). With `suggest_sections`:
+
+* **The closed list rides the RECORD.** `ConsultRecord.suggested_sections` — at most
+  `MAX_SUGGESTED_SECTIONS` (3) distinct section titles (the leaf of each passage's heading path,
+  written as the provenance header writes it: one line, sanitised), best score first, taken from
+  the passages the reading CUT: under the floor, or past it (by score or by the heading) and cut
+  by the evidence gate. A passage under the document title alone offers nothing. The evidence
+  line says `suggested=N` when N > 0.
+* **The filter is the scope guard's evidence rule, called.** A title is kept only when it shares
+  at least one content word that is NOT a business's frame word with ONE of the texts searched —
+  `cogno_anima.stages.scope_options.has_evidence` (the engram's tokenizer cut to
+  `EVIDENCE_PREFIX`, minus `GENERIC_SUBJECT_WORDS`), never a copy of it. The outline's numbering
+  (digits-only words) is not a word here, as in the heading test. Measured on the reference host:
+  the four negatives that had the answer under the floor keep it; the true negative («is there
+  parking?» over a bibliography and a student card) keeps nothing.
+* **The payload is the negative of always.** The executor is not shown the titles: a neighbouring
+  section is a question for the CONTACT, never an answer. Asking it — the words, the language,
+  when not to — is the host's.
+* **`section` reads the one chosen.** In the schema only with `suggest_sections`: the passages of
+  this reader's documents whose section title is the one given (the general fold: case, accents,
+  punctuation, whitespace; the WHOLE title, not a word of it), by ONE words-only search (no
+  embedding), at most `MAX_LIMIT` passages, best first, **no floor** — the contact's choice from a
+  closed list is the evidence. The record says `section_requested`. A title of a document this
+  reader cannot read, or one no section carries, reads nothing (`nothing_relevant`, «No section
+  with that title…»). With `max_whole_chars`, the section is NOT expanded beyond its passages.
+* **Off → byte for byte.** No `section` in the schema, no field filled, every payload and evidence
+  line as before — the main digests of the heading tests hold with the two new fields left out.
+
 ## What the executor reads
 
 ```
@@ -298,11 +332,17 @@ COVERS), how the documents were shown (`mode`: `passages` | `section` | `documen
 read whole (`whole_ids`), whether the budget cut one (`has_more`), whether this call was a
 continuation (`continued`; outcomes `continued` / `unreadable`) and whether the executor asked
 for the whole (`whole_requested`) — never text (`ConsultRecord`, pinned in
-`tests/unit/test_consult_documents.py`). Who pays, against which allowance, is the host's.
+`tests/unit/test_consult_documents.py`) **except** `suggested_sections` (VQD-2(b), only with
+`suggest_sections`): the business's own section titles, the one text a record carries, for the
+host to ask the contact with — a heading comes from a file's content, so the host filters it
+(personal data) before showing it to anybody. `section_requested` says the call read a section
+by title. Who pays, against which allowance, is the host's.
 
 ## What stays with the host
 
 Which store and embedder, the owner key, the reader's profile, the two floor values and the
 evidence floor, which section headings (already filtered) go into the description, the contact's
 raw turn, whether the tool is listed in a scope guard's tool table (use the same `offer` result),
-the ledger line for each record, and the publishing rules for documents and titles.
+the ledger line for each record, and the publishing rules for documents and titles. With
+`suggest_sections`: whether and how the contact is ASKED, which of the offered titles it may show
+(filtered for personal data), and how the contact's choice reaches the next turn's `section`.

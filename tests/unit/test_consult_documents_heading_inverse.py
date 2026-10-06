@@ -136,22 +136,30 @@ async def test_a_two_word_subject_inside_one_heading_passes():
     assert rec.heading_match == 1
 
 
-# ── the DECLARED LIMIT: a frame verb the shared list does not carry ───────────────────
+# ── the question verb is a FRAME word (anima 0.1.1) ──────────────────────────────────
 
-async def test_LIMIT_the_literal_sentence_with_sabe_is_not_rescued_by_itself():
-    # «sabe» is a content word to the engram's tokenizer and is not in GENERIC_SUBJECT_WORDS
-    # («saber» is; at the 6-character prefix «sabe» is not «saber»), so the contact's sentence
-    # ALONE names a word no heading carries. It is rescued when the model's query names the
-    # subject (the twin above). The conjugations belong in the shared list (anima) — a follow-up.
-    # When that lands this test fails, and it should be rewritten as a twin.
+async def test_TWIN_the_literal_sentence_with_sabe_is_rescued_by_itself(monkeypatch):
+    # Until anima 0.1.1 «sabe» was a content word (the shared list carried «saber», and at the
+    # 6-character prefix «sabe» is not «saber»), so the contact's sentence ALONE named a word no
+    # heading carries and this was the declared LIMIT of #17. anima 0.1.1 puts the question verbs
+    # in GENERIC_SUBJECT_WORDS (anima #207): the sentence now names only its subject, and the
+    # sentence by itself — no bare-subject query from the model — rescues the two sections.
     st, doc = await estate()
     sentence = f"O que sabe sobre o {SUBJECT}?"
     acc = hybrid(st, user_text=sentence)
     await run(acc, sentence)
     rec = acc.records[0]
     assert len(rec.variants) == 1
-    assert rec.outcome == OUTCOME_NOTHING_RELEVANT and rec.heading_match == 0, rec
-    assert cd._subject_words(cd.lexical_terms(sentence)) == {"sabe", "quintarelo"}
+    # the sentence alone lifts the subject's sections (here the evidence gate shows one of the
+    # two; the bare-subject twin above shows both) and nothing else
+    assert rec.outcome == OUTCOME_HITS and rec.heading_match >= 1, rec
+    assert set(rec.hit_ids) <= {kb(doc, 2), kb(doc, 3)}, rec
+    assert cd._subject_words(cd.lexical_terms(sentence)) == {"quintarelo"}
+    # the broken world, same store and sentence: nothing relevant
+    no_inverse(monkeypatch)
+    old = hybrid(st, user_text=sentence)
+    await run(old, sentence)
+    assert old.records[0].outcome == OUTCOME_NOTHING_RELEVANT, old.records[0]
 
 
 # ── control (a): a GENERIC one-word question lifts no section ─────────────────────────

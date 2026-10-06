@@ -152,14 +152,34 @@ floor **passes** when its section heading names the question:
   engram's word rule, on both sides;
 * **names** means EVERY content word of the heading is in ONE of the texts searched (the model's
   `query` or the contact's words — not spread over the two), and the heading has at least
-  `MIN_HEADING_WORDS` (2) of them.
+  `MIN_HEADING_WORDS` (2) of them;
+* **or the other way round** — the question IN the heading: EVERY *subject* word of ONE of the
+  texts searched is in the heading, and that text has at least ONE. A subject word is a content
+  word that is not digits-only and not one of a business's FRAME words — the ecosystem's one list
+  of those, `cogno_anima.stages.scope_options.GENERIC_SUBJECT_WORDS`, compared as it is compared
+  there (cut to `EVIDENCE_PREFIX` = 6 characters; no list of this skill's own). This is the short
+  question that names its subject: measured on a reference host, a question of one subject word
+  read three passages, ALL under the hybrid floor (`cut_by=floor`), from a document whose sections
+  «9. *Subject* — Investment» and «10. *Subject* — Rental income» were the answer — and the first
+  direction can never fire there, because each heading carries a word the question does not. A
+  question whose only words are frame words («School?», «Documents?») names nothing and lifts
+  nothing.
 
 **Why a floor of two words, not a list of generic headings.** One word shared with a question is
 exactly the evidence the rule refuses everywhere else — a heading of several words matched by
 ONE of them does not pass — so a one-word heading (*General*, *Other*) would be that same single
 word under another name. A list of generic headings is a list per language, and it fails OPEN on
 the word it forgot. The price is said, not hidden: a SPECIFIC one-word heading (*Parking*) does
-not get the exception either, and is judged by the floor as before.
+not get the exception from the first direction, and is judged by the floor as before — unless
+the question's subject words are ALL in it (*Parking?*), which is the second direction.
+
+**The second direction's declared limit.** A frame VERB the shared list does not carry is a
+subject word: «O que sabe sobre o *X*?» keeps «sabe» (the list has «saber», and at six characters
+«sabe» is not «saber»), so the contact's sentence alone names a word no heading has. It is
+rescued when the model's `query` names the subject alone — the measured shape. The conjugations
+belong in the shared list, not in a second one here; until they are added there,
+`test_LIMIT_the_literal_sentence_with_sabe_is_not_rescued_by_itself` pins the limit and fails the
+day they are.
 
 What it does **not** change:
 

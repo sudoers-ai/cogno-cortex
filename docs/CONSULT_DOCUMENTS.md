@@ -338,6 +338,33 @@ host to ask the contact with — a heading comes from a file's content, so the h
 (personal data) before showing it to anybody. `section_requested` says the call read a section
 by title. Who pays, against which allowance, is the host's.
 
+### Which documents the answer names: `shown_documents`
+
+`ConsultRecord.shown_documents` is a tuple of `(document id, title)` pairs: one for each document
+whose excerpt ENTERED the text this call returned, in the order the excerpts appear, each
+document once. It exists so a host can say where an answer came from without parsing the
+provenance header, which is prose for the executor and not a contract.
+
+- **One origin.** A pair is written by the same call that puts the excerpt block in the answer
+  (`_put`), with the title that block's header carries (`_shown_title`). The titles on the record
+  are exactly the titles in the headers, in every form of answer: passages, a document read
+  whole, the sections that hold the passages, the beginning of a document, a continuation, a
+  section read by its title (`tests/unit/test_consult_documents_shown_documents.py`).
+- **Only what is in the text.** A document whose passages passed and were left out for length is
+  in `hit_ids` and NOT here. A reading with no excerpt names nothing: *nothing relevant*, a failed
+  search, an unreadable document, a continuation past the end, a section title nobody has → `()`.
+- **The title is the business's text.** One line, passed through `sanitize_untrusted`, stripped of
+  excerpt-fence tags, at most `MAX_TITLE_CHARS` (120) with `…` when cut. It is `""` for a
+  document with no title (the header then writes `(untitled)`, which is a placeholder and not a
+  title). A host that shows it to a person still applies its own rules for that surface.
+- **Nothing else.** Never a passage, a section heading, a page or the question.
+- **Counting documents.** Count the pairs, not the non-empty titles: a text that shows a titled
+  document and an untitled one shows two documents.
+
+The record goes where every record goes: the `records` list the host pre-placed, in memory, for
+the length of the turn. This library persists and logs nothing of it. A host that copies records
+somewhere durable decides whether titles go with them.
+
 ## What stays with the host
 
 Which store and embedder, the owner key, the reader's profile, the two floor values and the

@@ -85,7 +85,8 @@ def hybrid(st, **kw) -> DocumentsAccess:
     return access(st, **base)
 
 
-_NOT_ON_MAIN = frozenset({"heading_match", "suggested_sections", "section_requested"})
+_NOT_ON_MAIN = frozenset({"heading_match", "suggested_sections", "section_requested",
+                          "shown_documents"})
 
 
 def legacy_digest(record, result, doc: str) -> str:
@@ -94,7 +95,10 @@ def legacy_digest(record, result, doc: str) -> str:
     written as ``DOC``. Pinned below from ``main`` (d42aa6c). The fields that tree did not have
     are left out: ``heading_match`` (this change) and the two of VQD-2(b) (``suggested_sections``,
     ``section_requested`` — at their defaults whenever the access does not suggest sections, which
-    the control below asserts, so leaving them out hides nothing)."""
+    the control below asserts, so leaving them out hides nothing) and ``shown_documents`` (the
+    documents the payload names: it is NOT at its default on a reading with hits, and it is left
+    out because it only repeats what the payload — digested here whole — already says;
+    ``tests/unit/test_consult_documents_shown_documents.py`` holds it to that payload)."""
     fields = {k: v for k, v in dataclasses.asdict(record).items() if k not in _NOT_ON_MAIN}
     blob = json.dumps({"record": fields, "payload": result.payload,
                        "evidence": list(result.evidence)}, sort_keys=True, ensure_ascii=False)

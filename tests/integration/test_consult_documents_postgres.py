@@ -237,6 +237,47 @@ async def test_WHOLE_on_postgres_the_served_document_whole_and_a_forged_id_reads
     assert "ZETA-ADMIN-MARCA" in ok.payload and admin.records[-1].outcome == OUTCOME_CONTINUED
 
 
+async def test_SHOWN_DOCUMENTS_on_postgres_the_record_names_the_documents_of_the_text(pg):
+    """``ConsultRecord.shown_documents`` over the REAL adapter — the title comes from the row the
+    store returns (``hit.title`` on a search, the served text's on a whole read): the passages
+    form, the whole form, a continuation, and the readings that name nothing (a negative, a
+    forged id of another profile — beside its CONTROL)."""
+    from cogno_cortex.skills.consult_documents import OUTCOME_UNREADABLE
+    owner = f"acme{uuid4().hex[:6]}/front-desk"
+    manual = await _publish(pg, owner, title="Manual interno", profiles=("EMPLOYEE",), chunks=[
+        SAT, ("Taxa de inscrição: 120.", ("Preços",), 3, NEUTRAL)])
+    staff_only = await _publish(pg, owner, title="Notas da direção", profiles=("ADMIN",),
+                                chunks=[("Orçamento de sábado.", ("Notas",), 1, NEUTRAL)])
+    named = ((manual, "Manual interno"),)
+    passages = _access(pg, owner)
+    res = await _run(passages, "sábado")
+    assert passages.records[-1].outcome == OUTCOME_HITS and "Manual interno › " in res.payload
+    assert passages.records[-1].shown_documents == named
+    whole = dict(whole_doc_chars=12000, max_whole_chars=24000)
+    staff = _access(pg, owner, **whole)
+    res = await _run(staff, "sábado")
+    assert "Manual interno · whole document" in res.payload
+    assert staff.records[-1].shown_documents == named
+    await ConsultDocumentsTool(query="x", document=manual).run(
+        ToolContext(metadata={META_DOCUMENTS_ACCESS: staff}))
+    assert staff.records[-1].shown_documents == named
+    # nothing in the text → nothing named (the evidence gate cuts a question with no common word)
+    gated = _access(pg, owner, lexical_evidence_floor=0.13, **whole)
+    await _run(gated, "estacionamento")
+    assert gated.records[-1].outcome == OUTCOME_NOTHING_RELEVANT
+    assert gated.records[-1].cut_by == CUT_LEXICAL_EVIDENCE
+    assert gated.records[-1].shown_documents == ()
+    await ConsultDocumentsTool(query="x", document=staff_only).run(
+        ToolContext(metadata={META_DOCUMENTS_ACCESS: staff}))
+    assert staff.records[-1].outcome == OUTCOME_UNREADABLE
+    assert staff.records[-1].shown_documents == ()
+    # CONTROL — the reader those notes are published to
+    admin = _access(pg, owner, profile="ADMIN", **whole)
+    await ConsultDocumentsTool(query="x", document=staff_only).run(
+        ToolContext(metadata={META_DOCUMENTS_ACCESS: admin}))
+    assert admin.records[-1].shown_documents == ((staff_only, "Notas da direção"),)
+
+
 # ── the floor's one exception on the production scale: evidence by the section HEADING ────
 #
 # The FORM of the measured case, INVENTED data: a section that is a table (years and figures,

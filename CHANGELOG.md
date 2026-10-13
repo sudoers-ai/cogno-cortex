@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.1.1 — the record names the documents an answer shows (`ConsultRecord.shown_documents`)
+
+### Added
+
+- **`ConsultRecord.shown_documents`** (`tuple[tuple[str, str], ...]`, `()` by default): one
+  `(document id, title)` pair for each document whose excerpt ENTERED the text the call returned,
+  in the order the excerpts appear, each document once. A host that tells a contact where an
+  answer came from had the title only as prose, in the provenance header; the record carried
+  passage ids and the ids of the documents read whole, and no title.
+  - **One origin.** The pair is written by the one call that puts an excerpt block in an answer
+    (`_put`), with the title that block's header carries (`_shown_title`, called once per block by
+    the two header builders). The four places that wrote a header (`render_excerpts`, the whole
+    reading's composer, the continuation, the section read by title) now go through it.
+  - **Only what is in the text.** A document whose passages passed and did not fit the budget is
+    not named. *Nothing relevant*, a failed search, an unreadable document, a continuation past
+    the end and a section title nobody has name nothing.
+  - **The title is the business's text**: one line, defanged, at most `MAX_TITLE_CHARS`, `""` for
+    a document with no title. Never a passage, a section, a page or the question.
+- Not named `shown`: that field already exists and is a COUNT (how many passed passages the
+  answer covers), which the reference host reads as a number.
+- Tests: `tests/unit/test_consult_documents_shown_documents.py` (the synchrony in every form of
+  answer, each negative beside its control, the title as third-party text) and one case over
+  the real Postgres adapter in `tests/integration/test_consult_documents_postgres.py`.
+
+### Unchanged
+
+- Every payload, every evidence line and every record field that existed: the `main` digests of
+  `test_consult_documents_heading_evidence.py` (record + payload + evidence; the new field is
+  left out of the digest, the payload it repeats is digested whole) and the payload digests of
+  `test_consult_documents_whole_read.py` hold.
+- `render_excerpts` still returns `(payload, shown)`.
+- Nothing is persisted or logged by this library: the record goes to the list the host
+  pre-placed, as before.
+
+### Declared limits
+
+- The pair says a document is IN the text, not that the executor used it.
+- A document with no id is named by its pair; two such documents with the same title are one.
+- No section and no page: a host that wants to cite the section still has only the header's
+  prose for it.
+
 ## Unreleased — «did you mean…?» over a negative: the sections a *nothing relevant* cut (VQD-2(b))
 
 ### Added (OFF by default)

@@ -99,7 +99,9 @@ A generic skill over a `cogno_engram.DocumentStore` — see
 3. `build_dispatcher([manifest], metadata={META_DOCUMENTS_ACCESS: access})` and merge it like any
    other source;
 4. after the turn, each `ConsultRecord` in the list is one call: bill `embedding_tokens`
-   (`usage_reported=False` means the count is UNKNOWN, not zero).
+   (`usage_reported=False` means the count is UNKNOWN, not zero). The same record says which
+   documents the answer's text names (`shown_documents`, `(document id, title)` pairs): read
+   the source of an answer there, never out of the result's prose.
 
 Two optional pieces, both OFF unless you set them:
 

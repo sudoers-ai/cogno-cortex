@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — docs sweep: every sentence checked against the code (docs only, 2026-10-14)
+
+No code or test changes.
+
+- **False sentences corrected.** `README.md` said the pin is `cogno-anima>=0.1,<0.2` and
+  «cannot express» the need for `scope_options`; `pyproject.toml` declares
+  `cogno-anima>=0.1.1,<0.2`, the first release that carries the module. Its lint line left out
+  `examples`, which CI checks. `LOGGING.md` called the `consult_documents` warnings «the two
+  WARNINGs above»: there are four events, from six call sites.
+- **`README.md` gains** the two things `consult_documents` learned and the README did not say —
+  «did you mean…?» over a negative (`DocumentsAccess.suggest_sections`, off by default) and the
+  documents an answer names (`ConsultRecord.shown_documents`, 0.1.1) — the index of every `.md`,
+  and the one environment variable the repository reads (`CORTEX_TEST_PG_DSN`, the tests').
+
 ## 0.1.1 — the record names the documents an answer shows (`ConsultRecord.shown_documents`)
 
 ### Added

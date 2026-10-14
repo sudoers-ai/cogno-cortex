@@ -150,11 +150,19 @@ snippet above, each OFF until it asks (the wiring is in
   because a heading is document CONTENT and filtering personal data out of it is the host's job;
 - **the section heading as evidence** (#15, both directions since #17) needs no wiring: a passage
   under the hybrid floor passes when its heading and the question name each other, and
-  `ConsultRecord.heading_match` counts them.
+  `ConsultRecord.heading_match` counts them;
+- **«did you mean…?» over a negative** (off by default): `DocumentsAccess(suggest_sections=True)`
+  makes a *nothing relevant* reading record the section titles it cut that share a content word with the
+  question, and adds an optional `section` argument to the schema that reads the one chosen.
+  With it off, the schema, every payload and every record field are byte for byte what they
+  were. The question a contact reads is the host's to write;
+- **the documents an answer names** (0.1.1) needs no wiring either:
+  `ConsultRecord.shown_documents` carries one `(document id, title)` pair per document the
+  answer's text shows, so a host that wants to cite a source reads the record and never parses
+  the text.
 
-Since #17 the skill imports `cogno_anima.stages.scope_options` (the shared frame-word list), which
-arrived in cogno-anima #200. The `cogno-anima>=0.1,<0.2` pin cannot express that, so an older
-cogno-anima checkout fails on `import cogno_cortex.skills.consult_documents`.
+Since #17 the skill imports `cogno_anima.stages.scope_options` (the shared frame-word list). That
+module exists from cogno-anima 0.1.1 on, and `pyproject.toml` says so: `cogno-anima>=0.1.1,<0.2`.
 
 ## What stays at the host
 
@@ -184,8 +192,30 @@ pip install -e ".[dev,documents]"   # dev pulls cogno-engram: the skill tests us
 pytest tests/unit -q            # fast, no network
 pytest tests/integration -q     # real EGO over Ollama, auto-skips if absent; the Postgres
                                 # leg needs CORTEX_TEST_PG_DSN naming a *test* database
-ruff check cogno_cortex tests && mypy cogno_cortex
+ruff check cogno_cortex tests examples && mypy cogno_cortex      # as CI runs them
 python examples/host_min.py     # offline demo: discover → rank → bridge → execute
 ```
+
+CI runs the unit suite under a coverage gate (`--cov=cogno_cortex --cov-fail-under=90`).
+
+The library reads **no environment variable**. The one the repository reads is the tests':
+`CORTEX_TEST_PG_DSN` (`tests/integration/test_consult_documents_postgres.py`).
+
+## Documentation
+
+Every `.md` of this repository.
+
+- [`docs/HOST_INTEGRATION.md`](docs/HOST_INTEGRATION.md) — how a host wires cortex: the pieces,
+  the per-turn flow, how a skill becomes a tool, custom providers, composing with MCP and native
+  tools, feedback and metering, and § 7, `consult_documents`.
+- [`docs/CONSULT_DOCUMENTS.md`](docs/CONSULT_DOCUMENTS.md) — the full contract of the documents
+  skill: the two gates, the description, the two fused searches, the floors and their one
+  exception, reading a document whole, «did you mean…?» over a negative, what the executor reads,
+  what a call spends, the record, and what stays with the host.
+- [`LOGGING.md`](LOGGING.md) — what the library logs, at which level, and what a line never
+  carries.
+- [`examples/skills/math/SKILL.md`](examples/skills/math/SKILL.md) — the manifest of the example
+  skill that `examples/host_min.py` discovers.
+- [`CHANGELOG.md`](CHANGELOG.md) — every change, newest first.
 
 Apache-2.0.

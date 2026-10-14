@@ -29,8 +29,9 @@ This library follows the Cogno house rule: **libraries emit, the host configures
 ## What gets logged
 - `cogno_cortex.bus` — DEBUG `event=skill_invoked`.
 - `cogno_cortex.loader` — WARNING `event=skill_import_failed`.
-- `cogno_cortex.skills.consult_documents` — the two WARNINGs above: an exception
-  TYPE or a width, never the question, a title or a passage.
+- `cogno_cortex.skills.consult_documents` — the four `consult_documents_*` WARNINGs
+  above (six call sites): an exception TYPE or a width, never the question, a title or a
+  passage.
 - `cogno_cortex.{types,base,registry,dispatcher}` — nothing.
 
 Skill arguments, payloads and prompt bodies are **never** logged (only the skill

@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.1.2 — `web_search` and `web_fetch`: two read-only web skills, behind guards (2026-10-19)
+
+### Added
+
+- **`cogno_cortex.skills.web_search`** — search the public web through a `SearchProvider` the
+  host injects (`async search(query, n) -> list[SearchHit]`; `SearchHit` is title, URL, snippet).
+  The model fills `query` and `max_results` (at most 5, and at most the host's ceiling). No extra:
+  the provider, its key and its allowance are the host's. `FakeSearchProvider` is the test double.
+  A provider raises `SearchQuotaExceeded` to refuse a call over the allowance; any other exception
+  is a failed search, said as such. Nothing failed is cached.
+- **`cogno_cortex.skills.web_fetch`** (extra `web`: `httpx`, `trafilatura`) — download ONE public
+  page and return its main text, cut to `max_chars` (default 6000, ceiling 20000).
+  - **SSRF guards**, before any byte and again on every redirect hop: `http`/`https` only, no
+    credentials in the URL, ports 80/443 by default, every resolved address public (private,
+    loopback, link-local and the metadata address, shared, reserved, multicast refused;
+    IPv4-mapped IPv6 read as IPv4), at most 3 redirects, status below 400, `text/html`,
+    `text/plain` or `application/xhtml+xml` only, 2 MB read in a stream, 10 s.
+  - **The connection goes to the address that was checked** (the URL is rewritten to it; the name
+    travels in `Host` and as the TLS server name), so a second DNS answer cannot move it.
+  - A fresh client per hop (no cookie travels), no authentication, no proxy or `.netrc` from the
+    environment, its own `User-Agent`.
+  - Extraction by `trafilatura` when installed, else `strip_tags` (standard library; drops
+    `script`/`style` and the other non-text elements with their content).
+- **Personal data never goes out** (both skills): the query, and the URL's path, query string and
+  fragment (raw and percent-decoded), are read by `cogno_anima`'s default detector before the call;
+  any finding refuses it (`status="error"`, evidence `web_search:pii_blocked` /
+  `web_fetch:pii_blocked`, the CLASSES named, never the value).
+- **`TTLCache`** — bounded, expiring, in process memory, keyed by the host's `scope` (one hour for a
+  search, ten minutes for a page by default). Nothing persisted.
+- **`WebRecord`** — one content-free record per execute in the list the host pre-placed: outcome,
+  closed refusal reason or exception class, `query_sha`, host name, counts, `provider_calls`,
+  `cached`, `redirects`, `pii_types`.
+- Docs: `docs/WEB_TOOLS.md` (the contract), `docs/HOST_INTEGRATION.md` § 8 (the wiring),
+  `LOGGING.md` (the eight new events), `README.md`.
+- Tests: `tests/unit/test_web_search.py`, `tests/unit/test_web_fetch.py` (against a local HTTP
+  server started as a subprocess on a disposable port and killed by PID, reached through an injected
+  resolver; every refusal proven by the server's request count NOT moving, beside its control) and
+  `tests/integration/test_web_fetch_local_server.py` (the system resolver on `localhost`).
+
+### Changed
+
+- CI installs `.[dev,documents,web]`; `dev` gains `httpx`.
+- `import cogno_cortex` still imports no skill; `web_search` imports no extra (pinned by a test).
+
+### Declared limits
+
+- The detector's whole definition of personal data refuses: a query naming an IP address, a URL
+  whose path holds a long number passing the card checksum.
+- The 2 MB ceiling counts DECODED bytes; one compressed chunk may expand in memory before the cut.
+- HTTPS through the pinned address is not exercised by the unit suite (the local server is plain
+  HTTP); the TLS server name is set from the original host.
+- No per-tenant list of allowed or blocked domains; no PDF; no browser.
+
 ## Unreleased — docs sweep: every sentence checked against the code (docs only, 2026-10-14)
 
 No code or test changes.

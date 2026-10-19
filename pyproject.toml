@@ -1,14 +1,14 @@
 [project]
 name = "cogno-cortex"
-version = "0.1.1"
-description = "The in-process skills framework for the Cogno stack — author skills as BaseTool + manifest, rank them against NER tags, execute via a provider bus, discover from disk, and bridge to cogno-anima's tool contract via CortexDispatcher. The framework, plus a few generic business-free skills behind extras (consult_documents); infra-agnostic."
+version = "0.1.2"
+description = "The in-process skills framework for the Cogno stack — author skills as BaseTool + manifest, rank them against NER tags, execute via a provider bus, discover from disk, and bridge to cogno-anima's tool contract via CortexDispatcher. The framework, plus a few generic business-free skills behind extras (consult_documents, web_search, web_fetch); infra-agnostic."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Vinicius Vale" }]
 maintainers = [{ name = "Sudoers AI" }]
-keywords = ["skills", "tools", "agents", "function-calling", "cogno", "llm"]
+keywords = ["skills", "tools", "agents", "function-calling", "cogno", "llm", "web-search"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -41,11 +41,18 @@ Issues = "https://github.com/sudoers-ai/cogno-cortex/issues"
 # only importing the skill module makes it a requirement. The document store arrived on engram's
 # `main` after the 0.1.1 release, so CI installs it from git until a release carries it.
 documents = ["cogno-engram>=0.1.1,<0.2"]
+# `cogno_cortex.skills.web_fetch` downloads a page with httpx and extracts its main text with
+# trafilatura. `web_search` needs neither (its provider is the host's). trafilatura is a
+# PREFERENCE, not a requirement of the code: without it the skill falls back to a standard-library
+# tag stripper (`web_fetch.strip_tags`), which the unit suite exercises on every run.
+web = ["httpx>=0.24", "trafilatura>=1.6"]
 dev = [
     # A HARD test dependency, never an `importorskip`: the skill's tests run against the REAL
     # `InMemoryDocumentStore`, and a suite that skips itself when the store is missing is green
     # over nothing.
     "cogno-engram>=0.1.1,<0.2",
+    # web_fetch's tests run against a real local HTTP server through httpx — hard, like engram.
+    "httpx>=0.24",
     "pytest>=8.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=5.0",

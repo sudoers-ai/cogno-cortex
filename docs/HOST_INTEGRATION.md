@@ -140,7 +140,33 @@ carrying the choice to the next turn (`section="<the title>"`) are yours. Off (t
 schema, payloads and records byte for byte. See `CONSULT_DOCUMENTS.md` § *«Did you mean…?» over
 a negative*.
 
-## 8. What stays yours
+## 8. `web_search` and `web_fetch` (extra `web` for the fetch)
+
+```python
+from cogno_cortex import build_dispatcher
+from cogno_cortex.skills.web_search import (META_WEB_SEARCH_ACCESS, WEB_SEARCH_MANIFEST,
+                                            TTLCache, WebSearchAccess)
+from cogno_cortex.skills.web_fetch import (META_WEB_FETCH_ACCESS, WEB_FETCH_MANIFEST,
+                                           WebFetchAccess)
+
+SEARCH_CACHE, PAGE_CACHE = TTLCache(3600), TTLCache(600)     # once per process
+
+records = []                                                  # pre-placed, per turn
+search = WebSearchAccess(provider=my_provider, scope=tenant_id, cache=SEARCH_CACHE,
+                         records=records, tool_names=turn_tool_names)
+fetch = WebFetchAccess(scope=tenant_id, cache=PAGE_CACHE, records=records,
+                       tool_names=turn_tool_names)
+source = build_dispatcher([WEB_SEARCH_MANIFEST, WEB_FETCH_MANIFEST],
+                          metadata={META_WEB_SEARCH_ACCESS: search, META_WEB_FETCH_ACCESS: fetch})
+```
+
+`my_provider` is yours: anything with `async search(query, n) -> list[SearchHit]`. Enforce your
+allowance in it (or in a wrapper) and raise `SearchQuotaExceeded` to refuse; bill from the records'
+`provider_calls`. The skills refuse personal data in a query or a URL BEFORE your provider or any
+site is reached, and the fetch refuses private addresses, odd ports, large or non-text responses
+and long redirect chains. The full contract is in [`WEB_TOOLS.md`](WEB_TOOLS.md).
+
+## 9. What stays yours
 
 Concrete skills (the product), shell/http/remote providers, persona selection
 (`cogno-persona`), RBAC, metering, MCP transport. cortex is the framework; you bring

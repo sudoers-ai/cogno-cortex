@@ -13,4 +13,8 @@ here is the moment its extra becomes a requirement).
 
 * :mod:`cogno_cortex.skills.consult_documents` — search a ``cogno_engram.DocumentStore``
   (extra ``documents``).
+* :mod:`cogno_cortex.skills.web_search` — search the public web through a ``SearchProvider`` the
+  host injects (no extra: the provider, its key and its allowance are the host's).
+* :mod:`cogno_cortex.skills.web_fetch` — download ONE public page, behind the SSRF and
+  personal-data guards, and return its main text (extra ``web``).
 """

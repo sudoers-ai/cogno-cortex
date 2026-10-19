@@ -46,7 +46,7 @@ jobs:
           # The `documents` extra (consult_documents) — engram's document store is on main, not
           # yet in a release. `[postgres]` so mypy and the Postgres leg see the real adapter.
           pip install "cogno-engram[postgres] @ git+https://github.com/sudoers-ai/cogno-engram.git"
-          pip install -e ".[dev,documents]"
+          pip install -e ".[dev,documents,web]"
       - name: Lint (ruff)
         run: ruff check cogno_cortex tests examples
       - name: Type-check (mypy)
@@ -88,7 +88,7 @@ jobs:
           pip install "cogno-synapse @ git+https://github.com/sudoers-ai/cogno-synapse.git"
           pip install "cogno-anima @ git+https://github.com/sudoers-ai/cogno-anima.git"
           pip install "cogno-engram[postgres] @ git+https://github.com/sudoers-ai/cogno-engram.git"
-          pip install -e ".[dev,documents]"
+          pip install -e ".[dev,documents,web]"
       - name: consult_documents over Postgres
         env:
           CORTEX_TEST_PG_DSN: postgresql://postgres:postgres@localhost:5432/cortex_test

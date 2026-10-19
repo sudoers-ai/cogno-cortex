@@ -115,6 +115,8 @@ as an injected parameter. Nothing under `cogno_cortex.skills` is imported by `im
 | Skill | Extra | What it does |
 |---|---|---|
 | `consult_documents` | `documents` (pulls `cogno-engram`) | searches a `cogno_engram.DocumentStore`: passages with provenance, or an honest "nothing relevant"; with a budget, reads a document WHOLE (#13) |
+| `web_search` | none | searches the public web through a `SearchProvider` the host injects (title, URL, snippet per hit); refuses a query that carries personal data before the provider is called |
+| `web_fetch` | `web` (`httpx`, `trafilatura`) | downloads ONE public page and returns its main text, behind SSRF guards (public addresses only, pinned connection, ≤3 redirects, 2 MB, 10 s, HTML/plain text only) and the same personal-data refusal |
 
 ```bash
 pip install "cogno-cortex[documents]"
@@ -164,9 +166,14 @@ snippet above, each OFF until it asks (the wiring is in
 Since #17 the skill imports `cogno_anima.stages.scope_options` (the shared frame-word list). That
 module exists from cogno-anima 0.1.1 on, and `pyproject.toml` says so: `cogno-anima>=0.1.1,<0.2`.
 
+`web_search` and `web_fetch` are read-only and take everything that is policy from the host: the
+search provider and its key, the allowance (raise `SearchQuotaExceeded`), the cache and its scope,
+the record list. Wiring: [`docs/HOST_INTEGRATION.md`](docs/HOST_INTEGRATION.md) § 8; contract:
+[`docs/WEB_TOOLS.md`](docs/WEB_TOOLS.md).
+
 ## What stays at the host
 
-The concrete skills (shell/web/browser/...), shell/http/remote **providers**
+The concrete skills (shell/browser/...), the web search PROVIDER, shell/http/remote **providers**
 (subprocess/network + security), persona selection, metering (`cogno-meter`), RBAC.
 cortex is the framework; the host plugs providers via the `SkillProvider` Protocol.
 
@@ -188,10 +195,12 @@ you can assemble a body of your own.
 ## Development
 
 ```bash
-pip install -e ".[dev,documents]"   # dev pulls cogno-engram: the skill tests use its real store
+pip install -e ".[dev,documents,web]"   # dev pulls cogno-engram (the skill tests use its real
+                                        # store) and httpx (web_fetch runs against a local server)
 pytest tests/unit -q            # fast, no network
 pytest tests/integration -q     # real EGO over Ollama, auto-skips if absent; the Postgres
-                                # leg needs CORTEX_TEST_PG_DSN naming a *test* database
+                                # leg needs CORTEX_TEST_PG_DSN naming a *test* database; the
+                                # web_fetch leg starts its own local server (no network)
 ruff check cogno_cortex tests examples && mypy cogno_cortex      # as CI runs them
 python examples/host_min.py     # offline demo: discover → rank → bridge → execute
 ```
@@ -207,11 +216,13 @@ Every `.md` of this repository.
 
 - [`docs/HOST_INTEGRATION.md`](docs/HOST_INTEGRATION.md) — how a host wires cortex: the pieces,
   the per-turn flow, how a skill becomes a tool, custom providers, composing with MCP and native
-  tools, feedback and metering, and § 7, `consult_documents`.
+  tools, feedback and metering, § 7, `consult_documents`, and § 8, the web skills.
 - [`docs/CONSULT_DOCUMENTS.md`](docs/CONSULT_DOCUMENTS.md) — the full contract of the documents
   skill: the two gates, the description, the two fused searches, the floors and their one
   exception, reading a document whole, «did you mean…?» over a negative, what the executor reads,
   what a call spends, the record, and what stays with the host.
+- [`docs/WEB_TOOLS.md`](docs/WEB_TOOLS.md) — the two web skills: the provider, the personal-data
+  refusal, the fetch guards (SSRF and the rest), extraction, the cache, the record.
 - [`LOGGING.md`](LOGGING.md) — what the library logs, at which level, and what a line never
   carries.
 - [`examples/skills/math/SKILL.md`](examples/skills/math/SKILL.md) — the manifest of the example

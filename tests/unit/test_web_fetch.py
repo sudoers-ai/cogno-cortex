@@ -210,6 +210,16 @@ def test_address_is_public(address, public):
     assert address_is_public(address) is public
 
 
+def test_a_nat64_address_is_judged_as_the_ipv4_it_embeds():
+    # 3.10's `is_global` does not know 64:ff9b::/96: judged raw, the loopback below reads
+    # "public" there (the mutation that drops the unwrap is what shows it, on every version).
+    assert not address_is_public("64:ff9b::7f00:1")                          # 127.0.0.1
+    assert not address_is_public("64:ff9b::a00:1")                           # 10.0.0.1
+    assert not address_is_public("64:ff9b:1::a9fe:a9fe")                     # 169.254.169.254
+    assert address_is_public("64:ff9b::0808:0808")                           # 8.8.8.8
+    assert address_is_public("64:ff9b::7f00:1", LOOP)                        # the exception, as IPv4
+
+
 def test_an_ipv4_mapped_address_is_judged_as_its_ipv4_both_ways():
     # Unwrapped, it is the IPv4 it names: a mapped PUBLIC address passes, and the explicit
     # exception for an IPv4 network covers its mapped form — judged raw, both would differ.

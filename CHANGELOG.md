@@ -15,7 +15,8 @@
   - **SSRF guards**, before any byte and again on every redirect hop: `http`/`https` only, no
     credentials in the URL, ports 80/443 by default, every resolved address public (private,
     loopback, link-local and the metadata address, shared, reserved, multicast refused;
-    IPv4-mapped IPv6 read as IPv4), at most 3 redirects, status below 400, `text/html`,
+    IPv4-mapped IPv6 read as IPv4, and a NAT64 address — `64:ff9b::/96`, `64:ff9b:1::/48` — read as the
+    IPv4 in its last 32 bits, because 3.10's `is_global` calls `64:ff9b::7f00:1` public), at most 3 redirects, status below 400, `text/html`,
     `text/plain` or `application/xhtml+xml` only, 2 MB read in a stream, 10 s.
   - **The connection goes to the address that was checked** (the URL is rewritten to it; the name
     travels in `Host` and as the TLS server name), so a second DNS answer cannot move it.

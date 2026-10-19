@@ -16,7 +16,8 @@ the cache and its scope, and the few limits a host may tighten — arrives in ON
   **port** must be in ``WebFetchAccess.ports`` (80 and 443 by default).
 * **the address (SSRF)**: the host name is resolved and EVERY address it resolves to must be
   public (``ipaddress``'s ``is_global``, multicast refused, an IPv4-mapped IPv6 address read as
-  its IPv4) — private, loopback, link-local (the cloud metadata address included), shared,
+  its IPv4, a NAT64 address — ``64:ff9b::/96``, ``64:ff9b:1::/48`` — as the IPv4 it embeds) —
+  private, loopback, link-local (the cloud metadata address included), shared,
   reserved and documentation ranges are refused. The connection then goes to the address that
   was CHECKED, with the original ``Host`` header and TLS server name, so a second resolution
   cannot hand the request somewhere else (DNS rebinding). ``WebFetchAccess.allow_networks``
@@ -149,6 +150,10 @@ async def system_resolver(host: str, port: int) -> "list[str]":
     return out
 
 
+#: The NAT64 prefixes (RFC 6052 well-known, RFC 8215 local-use): judged as the IPv4 they embed.
+_NAT64 = (ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("64:ff9b:1::/48"))
+
+
 def address_is_public(address: str, allow: "Iterable[Any]" = ()) -> bool:
     """Is ``address`` one a fetch may connect to? ``allow`` (networks) is the explicit exception."""
     try:
@@ -157,6 +162,10 @@ def address_is_public(address: str, allow: "Iterable[Any]" = ()) -> bool:
         return False
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         ip = ip.ipv4_mapped
+    if isinstance(ip, ipaddress.IPv6Address) and any(ip in net for net in _NAT64):
+        # A NAT64 address names the IPv4 in its last 32 bits, and that is where it goes —
+        # Python 3.10's `is_global` does not know 64:ff9b::/96 and calls 64:ff9b::7f00:1 public.
+        ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
     for net in allow:
         if ip.version == net.version and ip in net:
             return True

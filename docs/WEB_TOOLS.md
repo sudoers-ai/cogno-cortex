@@ -54,7 +54,7 @@ Checked before any byte is requested, and again on every redirect hop:
 | no `user:password@` in the URL | `credentials` |
 | port in `WebFetchAccess.ports` (default 80, 443) | `port` |
 | the host name resolves | `host` |
-| EVERY address it resolves to is public (`is_global`, not multicast; IPv4-mapped IPv6 read as IPv4) | `address` |
+| EVERY address it resolves to is public (`is_global`, not multicast; IPv4-mapped IPv6 and NAT64 — `64:ff9b::/96`, `64:ff9b:1::/48` — read as the IPv4 they embed) | `address` |
 | at most 3 redirects, each with a `Location` | `redirects` |
 | status below 400 | `status` |
 | `Content-Type` is `text/html`, `text/plain` or `application/xhtml+xml` | `content_type` |

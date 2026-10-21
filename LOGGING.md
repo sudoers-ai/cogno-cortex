@@ -2,7 +2,7 @@
 
 This library follows the Cogno house rule: **libraries emit, the host configures.**
 
-- Each module does `logger = logging.getLogger(__name__)` and emits lazy
+- Every module that logs takes its logger from `logging.getLogger(__name__)` and emits lazy
   `key=value` messages. The library installs **no** handlers/formatters and never
   calls `basicConfig`.
 - The host attaches its handler and sets the level per package, e.g.
@@ -47,7 +47,8 @@ This library follows the Cogno house rule: **libraries emit, the host configures
   `web_fetch_failed`; DEBUG `web_fetch_done`. The host NAME of the page (never its URL) is the one
   value of third-party origin a line carries: it is what an operator needs to see which site
   refused or failed.
-- `cogno_cortex.skills._web` and `cogno_cortex.{types,base,registry,dispatcher}` — nothing.
+- `cogno_cortex`, `cogno_cortex.skills`, `cogno_cortex.skills._web` and
+  `cogno_cortex.{types,base,registry,dispatcher}` — nothing.
 
 `query_sha` is 16 hex characters of SHA-256 over the normalised query: de-identification, not
 secrecy — a reader who guesses a query can confirm the guess. That is why a query refused for

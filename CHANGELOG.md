@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — docs: what 0.1.2 brought, re-checked against the code (docs only)
+
+No code or test changes.
+
+- `docs/WEB_TOOLS.md`: the bounds the host's access puts on what the model fills (`max_results`
+  clamped to `WebSearchAccess.max_results`; the query cut to 400 characters after the
+  personal-data check; `max_chars` between 500 and the ceiling; a URL over 2000 characters or with
+  whitespace is `invalid`, and a redirect that makes it longer is refused), the injectable
+  `resolver`, and that an empty search IS cached while an empty page is not.
+- `LOGGING.md`: "every module that logs" (not every module) takes a logger, and the list of
+  modules that log nothing gains `cogno_cortex` and `cogno_cortex.skills`.
+- This file: the docs sweep below 0.1.2 was still titled "Unreleased"; it is part of 0.1.2.
+
 ## 0.1.2 — `web_search` and `web_fetch`: two read-only web skills, behind guards (2026-10-19)
 
 ### Added
@@ -54,7 +67,9 @@
   HTTP); the TLS server name is set from the original host.
 - No per-tenant list of allowed or blocked domains; no PDF; no browser.
 
-## Unreleased — docs sweep: every sentence checked against the code (docs only, 2026-10-14)
+## Part of 0.1.2 — docs sweep: every sentence checked against the code (docs only, 2026-10-14)
+
+This section was titled "Unreleased" until 0.1.2 was cut on top of it; it is in 0.1.2.
 
 No code or test changes.
 

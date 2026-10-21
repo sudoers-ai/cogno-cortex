@@ -16,6 +16,19 @@ arrives from the host in one access object per skill.
 An argument the model invents is dropped by the argument model. An access that is missing is an
 error the executor reads as "not available", never as "nothing found".
 
+What the model fills is bounded by the host's access, never the other way round:
+
+- `max_results` is clamped to `WebSearchAccess.max_results` (the host's ceiling, an int from 1 to
+  `MAX_RESULTS` = 5, which is also its default); a value the model writes that is not a number reads
+  as that default.
+- the query is cut to `MAX_QUERY_CHARS` (400) AFTER the personal-data check, so the check reads
+  everything the model wrote;
+- `max_chars` is clamped between `MIN_CHARS` (500) and `WebFetchAccess.max_chars_ceiling`, and
+  `WebFetchAccess.max_chars` (default 6000) is used when the model gives none;
+- a URL that is empty, longer than `MAX_URL_CHARS` (2000) or contains whitespace is not fetched
+  (`outcome=invalid`); a redirect `Location` that makes the URL longer than that is refused with
+  `reason=redirects`.
+
 ## The provider (`web_search`)
 
 `SearchProvider` is one async method, `search(query, n) -> list[SearchHit]`, where `SearchHit` is
@@ -70,6 +83,8 @@ read from the environment (`trust_env=False`). The request carries its own `User
 `WebFetchAccess.allow_networks` is the one exception to the public-address rule, EMPTY by default:
 a test server, or an intranet a host decides to open, named network by network. The other limits
 (`timeout_s`, `max_bytes`, `max_redirects`, `max_chars_ceiling`) can only be tightened.
+`WebFetchAccess.resolver` (`async (host, port) -> [address, …]`, default `system_resolver`) is the
+name lookup the guards read; the unit tests inject one to reach their local server.
 
 ## Extraction
 
@@ -92,7 +107,8 @@ reading and says so.
 an injected clock: one hour for a search (`DEFAULT_CACHE_TTL_S` of `web_search`), ten minutes for a
 page (that of `web_fetch`). The host keeps one per process and passes it on the access, with a
 `scope`: the scope is part of every key, so a host that passes its tenant never serves one tenant
-an entry another paid for. A failure or a refusal is never cached. Nothing is persisted.
+an entry another paid for. A failure or a refusal is never cached. A search that came back with no
+hit IS cached, like any other answer; a page with no readable text is not. Nothing is persisted.
 
 ## The record
 
